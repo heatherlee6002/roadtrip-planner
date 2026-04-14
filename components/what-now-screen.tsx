@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, Dog, Tent, ArrowRight, Compass, AlertTriangle } from "lucide-react"
 import { getStopById, type StopData } from "@/lib/stops-data"
+import { createRouteDecisionContext, getNextStops } from "@/lib/route-engine"
 
 interface WhatNowScreenProps {
   currentStopId: string
@@ -20,8 +21,10 @@ export function WhatNowScreen({
   onShowStopDetail
 }: WhatNowScreenProps) {
   const currentStop = getStopById(currentStopId)
-  const nextStopId = String(parseInt(currentStopId) + 1)
-  const nextStop = getStopById(nextStopId)
+  const routeContext = createRouteDecisionContext({ currentStopId, userLocation: null })
+  const decision = getNextStops(routeContext, "fallback")
+  const nextStopId = decision.primaryStop?.id
+  const nextStop = nextStopId ? getStopById(nextStopId) : null
 
   if (!currentStop) {
     return (
@@ -35,7 +38,7 @@ export function WhatNowScreen({
     { 
       id: "dog",
       icon: Dog, 
-      label: "Dog-first", 
+      label: "Dog Walk", 
       description: currentStop.dog.primary,
       color: "bg-emerald-500/10 text-emerald-500",
       action: () => onShowStopDetail(currentStopId)
@@ -45,8 +48,8 @@ export function WhatNowScreen({
       icon: Tent, 
       label: "Stay", 
       description: currentStop.stay.length > 0 
-        ? `${currentStop.stay.length} options: ${currentStop.stay[0].name.split(' ')[0]}...`
-        : "View stay options",
+        ? `${currentStop.stay.length} planning options: ${currentStop.stay[0].name.split(' ')[0]}...`
+        : "View stay planning options",
       color: "bg-blue-500/10 text-blue-500",
       action: () => onShowStopDetail(currentStopId)
     },
@@ -58,7 +61,7 @@ export function WhatNowScreen({
         ? `Continue to ${nextStop.shortName} (${nextStop.totalMiles - currentStop.totalMiles} mi)`
         : "View next stop",
       color: "bg-primary/10 text-primary",
-      action: () => nextStop && onNavigateToStop(nextStopId)
+      action: () => nextStopId && onNavigateToStop(nextStopId)
     },
     { 
       id: "explore",
@@ -72,7 +75,7 @@ export function WhatNowScreen({
       id: "emergency",
       icon: AlertTriangle, 
       label: "Emergency", 
-      description: currentStop.emergency[0]?.label || "Find safe overnight options",
+      description: currentStop.emergency[0]?.label || "Find safety planning options",
       color: "bg-destructive/10 text-destructive",
       action: onShowEmergency
     },
