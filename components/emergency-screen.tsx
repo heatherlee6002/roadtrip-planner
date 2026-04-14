@@ -16,14 +16,14 @@ export function EmergencyScreen({ currentStopId, onBack }: EmergencyScreenProps)
     { 
       icon: Car, 
       label: "Safe Parking", 
-      description: currentStop?.emergency[0]?.label || "Truck stops, Walmart",
+      description: currentStop?.emergency[0]?.label || "Truck stops, Walmart (planning candidates)",
       urgent: false,
       searchQuery: "truck stop near me"
     },
     { 
       icon: Tent, 
       label: "Emergency Overnight", 
-      description: currentStop?.stay.find(s => s.letter === "D")?.name || "Walmart, rest areas",
+      description: currentStop?.stay.find(s => s.letter === "D")?.name || "Walmart, rest areas (planning candidates)",
       urgent: false,
       searchQuery: "walmart near me"
     },
@@ -103,7 +103,7 @@ export function EmergencyScreen({ currentStopId, onBack }: EmergencyScreenProps)
           {currentStop && currentStop.emergency.length > 1 && (
             <div className="mt-4 p-3 rounded-lg bg-muted/50 border border-border/50">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-                Nearby Options
+                Nearby Planning Candidates
               </p>
               <div className="space-y-1">
                 {currentStop.emergency.map((item, i) => (

@@ -7,11 +7,13 @@ interface TripMapProps {
   currentStopId: string
   selectedStop?: string | null
   onStopClick?: (stopId: string) => void
+  userLocation?: { lat: number; lng: number; accuracy?: number } | null
 }
 
-export function TripMap({ currentStopId, selectedStop, onStopClick }: TripMapProps) {
+export function TripMap({ currentStopId, selectedStop, onStopClick, userLocation }: TripMapProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<L.Map | null>(null)
+  const layersRef = useRef<L.LayerGroup | null>(null)
   const [isClient, setIsClient] = useState(false)
   const currentStopIndex = stopsData.findIndex(s => s.id === currentStopId)
   const currentStop = stopsData.find(s => s.id === currentStopId)
@@ -46,44 +48,63 @@ export function TripMap({ currentStopId, selectedStop, onStopClick }: TripMapPro
       })
 
       mapInstanceRef.current = map
+      layersRef.current = L.layerGroup().addTo(map)
 
       // Add tile layer
       L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       }).addTo(map)
 
-      // Generate route coordinates
-      const outboundStops = stopsData.filter(s => s.phase === "outbound" || s.phase === "turning-point")
-      const returnStops = stopsData.filter(s => s.phase === "return")
-      
-      const outboundCoords: [number, number][] = outboundStops.map(s => [s.lat, s.lng])
-      const returnCoords: [number, number][] = returnStops.map(s => [s.lat, s.lng])
-      
-      // Add connection from turning point to first return stop and back to start
-      const turningPoint = outboundStops[outboundStops.length - 1]
-      if (returnCoords.length > 0) {
-        returnCoords.unshift([turningPoint.lat, turningPoint.lng])
+      // Fit bounds to show all stops
+      const allCoords = stopsData.map(s => [s.lat, s.lng] as [number, number])
+      map.fitBounds(allCoords, { padding: [30, 30] })
+    }
+
+    initMap()
+
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove()
+        mapInstanceRef.current = null
+      }
+      layersRef.current = null
+    }
+  }, [isClient, currentStop])
+
+  useEffect(() => {
+    const updateLayers = async () => {
+      if (!mapInstanceRef.current || !layersRef.current) return
+      const map = mapInstanceRef.current
+      const layers = layersRef.current
+      const L = (await import("leaflet")).default
+      layers.clearLayers()
+
+      const outboundStops = stopsData.filter((s) => s.routeLeg === "outbound")
+      const returnStops = stopsData.filter((s) => s.routeLeg === "return")
+
+      const outboundCoords: [number, number][] = outboundStops.map((s) => [s.lat, s.lng])
+      const returnCoords: [number, number][] = returnStops.map((s) => [s.lat, s.lng])
+
+      if (returnCoords.length > 0 && outboundCoords.length > 0) {
+        returnCoords.unshift(outboundCoords[outboundCoords.length - 1])
         returnCoords.push([stopsData[0].lat, stopsData[0].lng])
       }
 
-      // Draw outbound route
       L.polyline(outboundCoords, {
         color: "#4a90d9",
         weight: 4,
         opacity: 0.8,
-      }).addTo(map)
+      }).addTo(layers)
 
-      // Draw return route
       if (returnCoords.length > 1) {
         L.polyline(returnCoords, {
           color: "#3d8b8b",
           weight: 3,
           opacity: 0.6,
           dashArray: "10, 10",
-        }).addTo(map)
+        }).addTo(layers)
       }
 
-      // Add markers for each stop
       stopsData.forEach((stop) => {
         const isCurrent = stop.id === currentStopId
         const isPast = parseInt(stop.id) < currentStopIndex
@@ -164,7 +185,7 @@ export function TripMap({ currentStopId, selectedStop, onStopClick }: TripMapPro
           iconAnchor,
         })
 
-        const marker = L.marker([stop.lat, stop.lng], { icon }).addTo(map)
+        const marker = L.marker([stop.lat, stop.lng], { icon }).addTo(layers)
         
         marker.on("click", (e) => {
           console.log("[v0] Marker clicked:", stop.id, stop.shortName)
@@ -183,20 +204,21 @@ export function TripMap({ currentStopId, selectedStop, onStopClick }: TripMapPro
         })
       })
 
-      // Fit bounds to show all stops
-      const allCoords = stopsData.map(s => [s.lat, s.lng] as [number, number])
-      map.fitBounds(allCoords, { padding: [30, 30] })
-    }
-
-    initMap()
-
-    return () => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove()
-        mapInstanceRef.current = null
+      if (userLocation) {
+        const userIcon = L.divIcon({
+          className: "",
+          html: `<div style="width: 14px; height: 14px; background: #60a5fa; border: 2px solid #fff; border-radius: 9999px; box-shadow: 0 0 0 10px rgba(96,165,250,0.2);"></div>`,
+          iconSize: [14, 14],
+          iconAnchor: [7, 7],
+        })
+        const marker = L.marker([userLocation.lat, userLocation.lng], { icon: userIcon }).addTo(layers)
+        marker.bindPopup("<div style='font-size:12px;'>You are here (GPS)</div>", { className: "dark-popup" })
+        map.setView([userLocation.lat, userLocation.lng], Math.max(map.getZoom(), 7))
       }
     }
-  }, [isClient, currentStopId, currentStopIndex, currentStop])
+
+    updateLayers()
+  }, [currentStopId, currentStopIndex, userLocation, selectedStop])
 
   if (!isClient) {
     return (

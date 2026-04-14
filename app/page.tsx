@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useEffect } from "react"
+import { useState, useCallback, useEffect, useMemo } from "react"
 import { MapPin, Maximize2 } from "lucide-react"
 import { TripMap } from "@/components/trip-map"
 import { RouteProgress } from "@/components/route-progress"
@@ -12,6 +12,7 @@ import { WhatNowScreen } from "@/components/what-now-screen"
 import { EmergencyScreen } from "@/components/emergency-screen"
 import { StopDetailScreen } from "@/components/stop-detail-screen"
 import { stopsData, getStopById, calculateProgress } from "@/lib/stops-data"
+import { createRouteDecisionContext, getNextStops, type RouteStrategy } from "@/lib/route-engine"
 import { useGeolocation } from "@/hooks/use-geolocation"
 import { ChatPanel } from "@/components/chat-panel"
 import { Navigation, X, ChevronRight, MapPin as MapPinIcon, Clock, Dog } from "lucide-react"
@@ -26,14 +27,19 @@ export default function RoadTripPlanner() {
   const [selectedStopId, setSelectedStopId] = useState<string | null>(null)
   const [showLocationPrompt, setShowLocationPrompt] = useState(false)
   const [stopPopupId, setStopPopupId] = useState<string | null>(null) // For stop marker panel
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number; accuracy?: number } | null>(null)
   
   // Trip state
   const [currentStopId, setCurrentStopId] = useState("0") // Start at Gloucester
   const [nextStopId, setNextStopId] = useState("1") // Central PA
   const [tripCompleted, setTripCompleted] = useState(false) // Track if trip is complete
+  const [routeStrategy] = useState<RouteStrategy>("fallback")
   
   // Geolocation
   const { 
+    latitude,
+    longitude,
+    accuracy,
     loading: geoLoading, 
     error: geoError, 
     nearestStop, 
@@ -41,12 +47,21 @@ export default function RoadTripPlanner() {
   } = useGeolocation()
 
   const currentStop = getStopById(currentStopId)
-  const nextStop = getStopById(nextStopId)
+  const routeContext = useMemo(
+    () =>
+      createRouteDecisionContext({
+        currentStopId,
+        userLocation: userLocation ? { lat: userLocation.lat, lng: userLocation.lng } : null,
+      }),
+    [currentStopId, userLocation]
+  )
+  const nextStopDecision = useMemo(() => getNextStops(routeContext, routeStrategy), [routeContext, routeStrategy])
+  const nextStop = getStopById(nextStopId) ?? nextStopDecision.primaryStop
   const progress = calculateProgress(currentStopId)
 
   // Determine destination for progress bar
   const isReturn = currentStop?.phase === "return"
-  const destinationLabel = isReturn ? "Back to Gloucester" : "California Coast"
+  const destinationLabel = isReturn ? "Massachusetts Interior / Home" : "Florida Keys"
 
   // Request location on initial load (optional - can be triggered by button)
   useEffect(() => {
@@ -54,6 +69,14 @@ export default function RoadTripPlanner() {
     requestLocation()
     setShowLocationPrompt(true)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (tripCompleted) return
+    const engineNextId = nextStopDecision.primaryStop?.id ?? "0"
+    if (engineNextId !== nextStopId) {
+      setNextStopId(engineNextId)
+    }
+  }, [nextStopDecision.primaryStop?.id, nextStopId, tripCompleted])
 
   const handleSetCurrentStop = useCallback((stopId: string, completingTrip = false) => {
     // When user arrives at a stop or confirms location
@@ -64,18 +87,17 @@ export default function RoadTripPlanner() {
       setTripCompleted(true)
       setNextStopId("0") // No next stop
     } else {
-      const nextIdx = parseInt(stopId) + 1
-      if (nextIdx < stopsData.length) {
-        setNextStopId(String(nextIdx))
-      }
+      const contextForStop = createRouteDecisionContext({ currentStopId: stopId, userLocation: null })
+      const decision = getNextStops(contextForStop, routeStrategy)
+      setNextStopId(decision.primaryStop?.id ?? "0")
     }
-  }, [])
+  }, [routeStrategy])
 
   const handleButtonClick = useCallback((type: "what-now" | "next-stop" | "emergency") => {
     console.log("[v0] Button clicked:", type)
     if (type === "next-stop") {
       // Check if this is the final leg back to Gloucester
-      if (nextStopId === "0" && currentStopId === "17") {
+      if (nextStopId === "0" && currentStopId === String(stopsData.length - 1)) {
         // Complete the trip
         handleSetCurrentStop("0", true)
       } else if (nextStop?.appleMapsQuery) {
@@ -124,21 +146,27 @@ export default function RoadTripPlanner() {
   }, [])
 
   const handleSkipStop = useCallback((stopId: string) => {
-    // Skip a stop and go to the next one
-    const skipIdx = parseInt(stopId)
-    const newNextIdx = skipIdx + 1
-    if (newNextIdx < stopsData.length) {
-      setNextStopId(String(newNextIdx))
+    const contextAfterSkip = createRouteDecisionContext({ currentStopId: stopId, userLocation: null })
+    const alternatives = getNextStops(contextAfterSkip, routeStrategy).alternatives
+    if (alternatives[0]) {
+      setNextStopId(alternatives[0].id)
     }
-  }, [])
+  }, [routeStrategy])
 
   // Location prompt handlers
   const handleLocationConfirm = useCallback(() => {
+    if (latitude !== null && longitude !== null) {
+      setUserLocation({
+        lat: latitude,
+        lng: longitude,
+        accuracy: accuracy ?? undefined,
+      })
+    }
     if (nearestStop.stop) {
       handleSetCurrentStop(nearestStop.stop.id)
     }
     setShowLocationPrompt(false)
-  }, [nearestStop.stop, handleSetCurrentStop])
+  }, [nearestStop.stop, handleSetCurrentStop, latitude, longitude, accuracy])
 
   const handleLocationDismiss = useCallback(() => {
     setShowLocationPrompt(false)
@@ -157,6 +185,7 @@ export default function RoadTripPlanner() {
     setTripCompleted(false)
     setCurrentStopId("0")
     setNextStopId("1")
+    setUserLocation(null)
     setCurrentScreen("map")
   }, [])
 
@@ -277,7 +306,7 @@ export default function RoadTripPlanner() {
                 <MapPin className="w-5 h-5 text-primary" />
                 <div>
                   <span className="text-sm text-muted-foreground">You are near </span>
-                  <span className="text-sm font-semibold text-foreground">{currentStop?.shortName || "Gloucester"}</span>
+                  <span className="text-sm font-semibold text-foreground">{currentStop?.shortName || "Home"}</span>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -285,7 +314,7 @@ export default function RoadTripPlanner() {
                   <Maximize2 className="w-3.5 h-3.5" />
                   Overview
                 </Button>
-                <Button 
+                <Button
                   variant="outline" 
                   size="sm" 
                   className="text-xs text-primary border-primary h-8"
@@ -294,7 +323,7 @@ export default function RoadTripPlanner() {
                     setShowLocationPrompt(true)
                   }}
                 >
-                  Change
+                  Locate Me
                 </Button>
               </div>
             </>
@@ -304,7 +333,7 @@ export default function RoadTripPlanner() {
         {/* Route Progress Bar */}
         <div className="px-4 pb-2">
           <RouteProgress 
-            from={tripCompleted ? "Gloucester" : (currentStop?.shortName || "Gloucester")} 
+            from={tripCompleted ? "Home" : (userLocation ? "Your location (GPS)" : (currentStop?.shortName || "Home"))}
             to={tripCompleted ? "Trip Complete" : destinationLabel}
             progress={tripCompleted ? 100 : progress}
             phase={tripCompleted ? "return" : (currentStop?.phase || "outbound")}
@@ -318,6 +347,7 @@ export default function RoadTripPlanner() {
             currentStopId={currentStopId}
             selectedStop={selectedStopId}
             onStopClick={handleStopClick}
+            userLocation={userLocation}
           />
           
           {/* Popup Preview */}

@@ -77,12 +77,12 @@ export function StopDetailScreen({ stopId, onBack, onNavigateToStop }: StopDetai
             </div>
           )}
 
-          {/* Stay Options */}
+          {/* Stay candidate options (static planning data) */}
           {stop.stay.length > 0 && (
             <section className="space-y-2">
               <div className="flex items-center gap-2">
                 <Tent className="w-4 h-4 text-primary" />
-                <h2 className="text-xs font-semibold text-foreground uppercase tracking-wide">Stay</h2>
+                <h2 className="text-xs font-semibold text-foreground uppercase tracking-wide">Stay (Planning)</h2>
               </div>
               <div className="space-y-1.5">
                 {stop.stay.map((option) => (
@@ -113,11 +113,11 @@ export function StopDetailScreen({ stopId, onBack, onNavigateToStop }: StopDetai
             </section>
           )}
 
-          {/* Dog Options */}
+          {/* Dog walk candidate options (static planning data) */}
           <section className="space-y-2">
             <div className="flex items-center gap-2">
               <Dog className="w-4 h-4 text-emerald-500" />
-              <h2 className="text-xs font-semibold text-foreground uppercase tracking-wide">Dog</h2>
+              <h2 className="text-xs font-semibold text-foreground uppercase tracking-wide">Dog Walk (Planning)</h2>
             </div>
             <div className="p-2.5 rounded-lg bg-card border border-border/50 space-y-2">
               <div className="flex items-center gap-2">
@@ -171,11 +171,11 @@ export function StopDetailScreen({ stopId, onBack, onNavigateToStop }: StopDetai
             </div>
           </section>
 
-          {/* Emergency */}
+          {/* Emergency candidate options (static planning data) */}
           <section className="space-y-2">
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-destructive" />
-              <h2 className="text-xs font-semibold text-foreground uppercase tracking-wide">Emergency</h2>
+              <h2 className="text-xs font-semibold text-foreground uppercase tracking-wide">Emergency (Planning)</h2>
             </div>
             <div className="space-y-1.5">
               {stop.emergency.map((option, idx) => (
