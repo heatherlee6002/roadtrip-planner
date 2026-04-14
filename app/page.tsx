@@ -61,7 +61,7 @@ export default function RoadTripPlanner() {
 
   // Determine destination for progress bar
   const isReturn = currentStop?.phase === "return"
-  const destinationLabel = isReturn ? "Massachusetts Interior / Home" : "Florida Keys"
+  const destinationLabel = isReturn ? "Home / New England" : "Yellowstone / Tetons"
 
   // Request location on initial load (optional - can be triggered by button)
   useEffect(() => {

@@ -26,7 +26,7 @@ export function createRouteDecisionContext(params: {
 }): RouteDecisionContext {
   const currentStop = getStopById(params.currentStopId)
   const currentLeg: RouteLegId = currentStop?.phase === "return" ? "return" : "outbound"
-  const routeStyle: RouteStyle = currentLeg === "outbound" ? "coastal" : "inland"
+  const routeStyle: RouteStyle = currentStop?.routeStyle ?? (currentLeg === "outbound" ? "scenic-outbound" : "scenic-return")
 
   const currentIndex = stopsData.findIndex((stop) => stop.id === params.currentStopId)
   const completedStops = currentIndex >= 0 ? stopsData.slice(0, currentIndex + 1).map((s) => s.id) : []
@@ -68,7 +68,7 @@ export function getNextStops(context: RouteDecisionContext, routeStrategy: Route
   const primaryStop = stopsData[primaryIndex] ?? null
   const alternatives = stopsData.slice(primaryIndex + 1, primaryIndex + 4)
 
-  const reason = `This keeps you on the ${context.routeStyle} ${context.currentLeg} fallback corridor from your current direction.`
+  const reason = `This keeps you on the ${context.currentLeg} scenic fallback corridor from your current direction.`
 
   return {
     primaryStop,

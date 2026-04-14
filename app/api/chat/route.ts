@@ -66,8 +66,9 @@ ${formatStopContext(nextStop)}
 
 FULL ROUTE OVERVIEW:
 The trip has ${stopsData.length} stops total, using a static fallback architecture:
-- Outbound leg: coastal corridor down to Florida Keys.
-- Return leg: inland corridor back toward Massachusetts.
+- Route name: Cross-Country Scenic Loop.
+- Outbound leg: nationwide scenic anchors (New England -> Mid-Atlantic -> Smokies/Appalachians -> southern/central connectors -> Rockies -> Yellowstone/Tetons).
+- Return leg: northern interior + Great Lakes/Midwest + PA/NY interior back to home.
 - Start mode: precise device GPS in the client UI.
 - End mode: home.
 
