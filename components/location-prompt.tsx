@@ -109,7 +109,7 @@ export function LocationPrompt({
             </div>
             <div className="text-center">
               <p className="text-xs text-muted-foreground">
-                {isClose ? "Update your current location?" : "Set this as your current location?"}
+                {isClose ? "Use your precise GPS position as trip start?" : "Set this GPS location as trip start?"}
               </p>
             </div>
             <div className="flex gap-2 w-full">

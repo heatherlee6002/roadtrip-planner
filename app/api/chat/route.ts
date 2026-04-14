@@ -17,7 +17,7 @@ function formatStopContext(stop: StopData | undefined): string {
   context += `Type: ${stop.type}\n\n`
   
   if (stop.stay.length > 0) {
-    context += `Stay options:\n`
+    context += `Stay candidate options (static planning data):\n`
     stop.stay.forEach(s => {
       context += `  ${s.letter}. ${s.name}\n`
     })
@@ -29,7 +29,7 @@ function formatStopContext(stop: StopData | undefined): string {
   if (stop.dog.restrictions) context += ` | RESTRICTIONS: ${stop.dog.restrictions}`
   context += '\n\n'
   
-  context += `Emergency options:\n`
+  context += `Emergency candidate options (static planning data):\n`
   stop.emergency.forEach(e => {
     context += `  - ${e.label}\n`
   })
@@ -56,7 +56,7 @@ export async function POST(req: Request) {
   
   // Build context about the trip
   const tripContext = `
-You are a helpful road trip assistant for a cross-country road trip with a dog. You help the user make decisions about where to stay, dog-friendly activities, safety, and navigation.
+You are a helpful road trip assistant for a road trip with a dog. You help the user make decisions about where to stay, dog-friendly activities, safety, and navigation.
 
 CURRENT LOCATION:
 ${formatStopContext(currentStop)}
@@ -65,10 +65,16 @@ NEXT PLANNED STOP:
 ${formatStopContext(nextStop)}
 
 FULL ROUTE OVERVIEW:
-The trip has ${stopsData.length} stops total, going from Gloucester, MA to Northern California coast and back via a northern route through Montana, North Dakota, Wisconsin, and Vermont.
+The trip has ${stopsData.length} stops total, using a static fallback architecture:
+- Route name: Cross-Country Scenic Loop.
+- Outbound leg: nationwide scenic anchors (New England -> Mid-Atlantic -> Smokies/Appalachians -> southern/central connectors -> Rockies -> Yellowstone/Tetons).
+- Return leg: northern interior + Great Lakes/Midwest + PA/NY interior back to home.
+- Start mode: precise device GPS in the client UI.
+- End mode: home.
 
 KEY GUIDELINES:
 - Prioritize dog safety and comfort in all recommendations
+- Stay/dog/emergency entries are static planning candidates, not live validated inventory
 - For "stay-friendly" stops, recommend campgrounds or dispersed camping first
 - For "scenic-only" stops, emphasize quick dog breaks and photo ops
 - For "transit" stops, focus on efficiency and rest areas

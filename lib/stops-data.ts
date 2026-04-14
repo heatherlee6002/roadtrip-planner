@@ -1,526 +1,570 @@
 export type StopType = "stay-friendly" | "scenic-only" | "transit"
 export type RoutePhase = "outbound" | "turning-point" | "return"
+export type RouteLegId = "outbound" | "return"
+export type RouteStyle = "scenic-outbound" | "scenic-return"
 
-export interface StopData {
-  id: string
+export interface CandidateOption {
+  letter: string
   name: string
-  shortName: string
-  distance: string
-  totalMiles: number
-  subtitle: string
-  x: number
-  y: number
-  lat: number
-  lng: number
-  status: "start" | "current" | "upcoming" | "future" | "completed"
-  stepNumber?: number
-  phase: RoutePhase
-  type: StopType
-  stay: { letter: string; name: string; appleMapsQuery?: string }[]
-  dog: { primary: string; primaryQuery?: string; secondary?: string; secondaryQuery?: string; restrictions?: string }
-  next: { label: string; stopId?: string }[]
-  emergency: { label: string; appleMapsQuery?: string }[]
-  logistics: { groceries: string; groceriesQuery?: string; gas: string; gasQuery?: string }
-  notes?: string
-  appleMapsQuery: string
+  appleMapsQuery?: string
 }
 
-export const stopsData: StopData[] = [
-  // START
+export interface DogWalkCandidate {
+  primary: string
+  primaryQuery?: string
+  secondary?: string
+  secondaryQuery?: string
+  restrictions?: string
+}
+
+export interface CandidatePlanningData {
+  // Static fallback planning data only. These are not live-validated listings.
+  stayCandidates: CandidateOption[]
+  dogWalkCandidates: DogWalkCandidate
+  emergencyCandidates: { label: string; appleMapsQuery?: string }[]
+  logistics: { groceries: string; groceriesQuery?: string; gas: string; gasQuery?: string }
+}
+
+export interface RouteStopSeed {
+  id: string
+  leg: RouteLegId
+  style: RouteStyle
+  phase: RoutePhase
+  stepNumber?: number
+  anchorRegion: string
+  name: string
+  shortName: string
+  subtitle: string
+  distance: string
+  totalMiles: number
+  lat: number
+  lng: number
+  x: number
+  y: number
+  type: StopType
+  notes?: string
+  appleMapsQuery: string
+  candidateData: CandidatePlanningData
+}
+
+export interface StopData extends Omit<RouteStopSeed, "leg" | "style" | "candidateData"> {
+  routeLeg: RouteLegId
+  routeStyle: RouteStyle
+  status: "start" | "current" | "upcoming" | "future" | "completed"
+  next: { label: string; stopId?: string }[]
+  // Backwards-compatible aliases used by current UI components.
+  stay: CandidateOption[]
+  dog: DogWalkCandidate
+  emergency: { label: string; appleMapsQuery?: string }[]
+  logistics: { groceries: string; groceriesQuery?: string; gas: string; gasQuery?: string }
+}
+
+export interface FallbackRouteMetadata {
+  id: string
+  name: string
+  version: string
+  startMode: "device-gps"
+  endMode: "home"
+  homeStopId: string
+  anchorRegions: {
+    outbound: string[]
+    return: string[]
+  }
+  description: string
+}
+
+export interface FallbackRoutePlan {
+  metadata: FallbackRouteMetadata
+  legs: {
+    id: RouteLegId
+    label: string
+    style: RouteStyle
+    stopIds: string[]
+  }[]
+}
+
+// TODO(ai): Keep data static for now. Future AI strategy should consume this route plan
+// via lib/route-engine.ts to enable dynamic recalc, scoring, and recommendation injection.
+export const fallbackRoutePlan: FallbackRoutePlan = {
+  metadata: {
+    id: "cross-country-scenic-loop",
+    name: "Cross-Country Scenic Loop",
+    version: "2026-04",
+    startMode: "device-gps",
+    endMode: "home",
+    homeStopId: "0",
+    anchorRegions: {
+      outbound: [
+        "Home / New England",
+        "Mid-Atlantic Transition",
+        "Great Smoky Mountains",
+        "Appalachian South",
+        "Southern Inland Connector",
+        "High Plains Connector",
+        "Rockies Approach",
+        "Yellowstone",
+        "Grand Teton (optional)",
+      ],
+      return: [
+        "Yellowstone / Tetons",
+        "Northern Interior Corridor",
+        "Great Lakes / Midwest",
+        "Pennsylvania Interior",
+        "New York Interior",
+        "Home",
+      ],
+    },
+    description: "Static nationwide scenic fallback loop with anchor regions for future AI-driven routing.",
+  },
+  legs: [
+    {
+      id: "outbound",
+      label: "Outbound",
+      style: "scenic-outbound",
+      stopIds: ["0", "1", "2", "3", "4", "5", "6", "7", "8"],
+    },
+    {
+      id: "return",
+      label: "Return",
+      style: "scenic-return",
+      stopIds: ["9", "10", "11", "12", "13"],
+    },
+  ],
+}
+
+const routeSeeds: RouteStopSeed[] = [
   {
     id: "0",
-    name: "Gloucester, MA",
-    shortName: "Gloucester",
+    leg: "outbound",
+    style: "scenic-outbound",
+    phase: "outbound",
+    anchorRegion: "Home / New England",
+    name: "Home - Gloucester, MA",
+    shortName: "Home",
+    subtitle: "New England home base",
     distance: "Start",
     totalMiles: 0,
-    subtitle: "Starting point",
-    x: 95,
-    y: 8,
     lat: 42.6159,
-    lng: -70.6620,
-    status: "start",
-    phase: "outbound",
+    lng: -70.662,
+    x: 93,
+    y: 8,
     type: "stay-friendly",
-    stay: [],
-    dog: { primary: "Good Harbor Beach", primaryQuery: "Good Harbor Beach, Gloucester, MA", secondary: "Dogtown trails", secondaryQuery: "Dogtown Commons, Gloucester, MA" },
-    next: [{ label: "Central PA", stopId: "1" }],
-    emergency: [{ label: "Home base", appleMapsQuery: "Gloucester, MA" }],
-    logistics: { groceries: "Market Basket", groceriesQuery: "Market Basket, Gloucester, MA", gas: "Route 128", gasQuery: "Gas Station, Route 128, MA" },
     appleMapsQuery: "Gloucester, MA",
+    candidateData: {
+      stayCandidates: [],
+      dogWalkCandidates: {
+        primary: "Good Harbor Beach",
+        primaryQuery: "Good Harbor Beach, Gloucester, MA",
+        secondary: "Dogtown Commons trails",
+        secondaryQuery: "Dogtown Commons, Gloucester, MA",
+      },
+      emergencyCandidates: [{ label: "Home base", appleMapsQuery: "Gloucester, MA" }],
+      logistics: { groceries: "Market Basket (planning)", gas: "Route 128 fuel stops (planning)" },
+    },
   },
-  // OUTBOUND STOPS (1-10)
   {
     id: "1",
-    name: "Central Pennsylvania",
-    shortName: "Central PA",
-    distance: "380 mi",
-    totalMiles: 380,
-    subtitle: "State College area",
-    x: 82,
-    y: 14,
-    lat: 40.7934,
-    lng: -77.8600,
-    status: "upcoming",
-    stepNumber: 1,
+    leg: "outbound",
+    style: "scenic-outbound",
     phase: "outbound",
-    type: "stay-friendly",
-    stay: [
-      { letter: "A", name: "Bald Eagle State Park campground", appleMapsQuery: "Bald Eagle State Park, PA" },
-      { letter: "B", name: "Bald Eagle State Forest dispersed", appleMapsQuery: "Bald Eagle State Forest, PA" },
-      { letter: "C", name: "Bellefonte / State College private", appleMapsQuery: "State College, PA" },
-      { letter: "D", name: "Walmart Supercenter (State College)", appleMapsQuery: "Walmart Supercenter, State College, PA" },
-    ],
-    dog: { primary: "Bald Eagle State Park trails", primaryQuery: "Bald Eagle State Park, PA", secondary: "State forest roads and lakes", secondaryQuery: "Bald Eagle State Forest, PA" },
-    next: [{ label: "Shenandoah", stopId: "2" }, { label: "Skip ahead", stopId: "3" }],
-    emergency: [{ label: "Pilot / Flying J (I-80)", appleMapsQuery: "Pilot Travel Center, Bellefonte, PA" }, { label: "Walmart overnight", appleMapsQuery: "Walmart, State College, PA" }],
-    logistics: { groceries: "Wegmans / Walmart", groceriesQuery: "Wegmans, State College, PA", gas: "I-80 exits", gasQuery: "Gas Station, I-80, PA" },
-    appleMapsQuery: "State College, PA",
+    stepNumber: 1,
+    anchorRegion: "Mid-Atlantic Transition",
+    name: "Mid-Atlantic Transition",
+    shortName: "Mid-Atlantic",
+    subtitle: "PA / VA transition corridor",
+    distance: "420 mi",
+    totalMiles: 420,
+    lat: 39.9526,
+    lng: -75.1652,
+    x: 84,
+    y: 17,
+    type: "transit",
+    appleMapsQuery: "Philadelphia, PA",
+    candidateData: {
+      stayCandidates: [
+        { letter: "A", name: "State park camp areas (planning)", appleMapsQuery: "French Creek State Park, PA" },
+        { letter: "B", name: "I-95 private stays (planning)", appleMapsQuery: "Campground, Philadelphia, PA" },
+      ],
+      dogWalkCandidates: { primary: "Schuylkill River trail segments", primaryQuery: "Schuylkill River Trail, PA" },
+      emergencyCandidates: [{ label: "I-95 / I-76 service corridors", appleMapsQuery: "Hospital, Philadelphia, PA" }],
+      logistics: { groceries: "Wegmans / Giant (planning)", gas: "Interstate exits (planning)" },
+    },
   },
   {
     id: "2",
-    name: "Shenandoah / Harrisonburg",
-    shortName: "Shenandoah",
-    distance: "580 mi",
-    totalMiles: 580,
-    subtitle: "Blue Ridge Parkway access",
-    x: 75,
-    y: 20,
-    lat: 38.4496,
-    lng: -78.8689,
-    status: "future",
-    stepNumber: 2,
+    leg: "outbound",
+    style: "scenic-outbound",
     phase: "outbound",
+    stepNumber: 2,
+    anchorRegion: "Great Smoky Mountains",
+    name: "Great Smoky Mountains",
+    shortName: "Smokies",
+    subtitle: "National park gateway",
+    distance: "980 mi",
+    totalMiles: 980,
+    lat: 35.6118,
+    lng: -83.4895,
+    x: 69,
+    y: 31,
     type: "stay-friendly",
-    stay: [
-      { letter: "A", name: "Shenandoah NP campground (Big Meadows)", appleMapsQuery: "Big Meadows Campground, Shenandoah National Park, VA" },
-      { letter: "B", name: "George Washington NF dispersed", appleMapsQuery: "George Washington National Forest, VA" },
-      { letter: "C", name: "Harrisonburg private campground", appleMapsQuery: "Campground, Harrisonburg, VA" },
-      { letter: "D", name: "Walmart (Harrisonburg)", appleMapsQuery: "Walmart, Harrisonburg, VA" },
-    ],
-    dog: { primary: "Shenandoah NP trails (leashed)", primaryQuery: "Shenandoah National Park, VA", secondary: "George Washington NF off-leash areas", secondaryQuery: "George Washington National Forest, VA" },
-    next: [{ label: "SW VA / E TN", stopId: "3" }, { label: "Smokies direct", stopId: "4" }],
-    emergency: [{ label: "Pilot (I-81)", appleMapsQuery: "Pilot Travel Center, I-81, VA" }, { label: "Harrisonburg hotels", appleMapsQuery: "Hotels, Harrisonburg, VA" }],
-    logistics: { groceries: "Kroger / Food Lion", groceriesQuery: "Kroger, Harrisonburg, VA", gas: "I-81 corridor", gasQuery: "Gas Station, I-81, Harrisonburg, VA" },
-    appleMapsQuery: "Harrisonburg, VA",
+    notes: "Scenic anchor. Dog access varies by trail in park zones.",
+    appleMapsQuery: "Gatlinburg, TN",
+    candidateData: {
+      stayCandidates: [
+        { letter: "A", name: "Park-adjacent campgrounds (planning)", appleMapsQuery: "Elkmont Campground, TN" },
+        { letter: "B", name: "Cherokee NF dispersed options (planning)", appleMapsQuery: "Cherokee National Forest, TN" },
+      ],
+      dogWalkCandidates: {
+        primary: "Gatlinburg Trail + nearby forest roads",
+        primaryQuery: "Gatlinburg Trailhead, TN",
+        restrictions: "Park trail rules vary by area and season",
+      },
+      emergencyCandidates: [{ label: "US-441 and I-40 services", appleMapsQuery: "Hospital, Sevierville, TN" }],
+      logistics: { groceries: "Food City / Kroger (planning)", gas: "US-441 fuel (planning)" },
+    },
   },
   {
     id: "3",
-    name: "SW Virginia / E Tennessee",
-    shortName: "SW VA / E TN",
-    distance: "720 mi",
-    totalMiles: 720,
-    subtitle: "Appalachian transition",
-    x: 68,
-    y: 26,
-    lat: 36.7088,
-    lng: -82.0197,
-    status: "future",
-    stepNumber: 3,
+    leg: "outbound",
+    style: "scenic-outbound",
     phase: "outbound",
-    type: "transit",
-    stay: [
-      { letter: "A", name: "Jefferson NF campground", appleMapsQuery: "Jefferson National Forest Campground, VA" },
-      { letter: "B", name: "Cherokee NF dispersed", appleMapsQuery: "Cherokee National Forest, TN" },
-      { letter: "C", name: "Bristol / Abingdon private", appleMapsQuery: "Campground, Abingdon, VA" },
-      { letter: "D", name: "Truck stop (I-81)", appleMapsQuery: "Pilot Travel Center, I-81, Abingdon, VA" },
-    ],
-    dog: { primary: "Jefferson NF trails", primaryQuery: "Jefferson National Forest, VA", secondary: "Creeper Trail sections", secondaryQuery: "Virginia Creeper Trail, VA" },
-    next: [{ label: "Smokies Base", stopId: "4" }, { label: "Great Smokies", stopId: "5" }],
-    emergency: [{ label: "Love's / Pilot (I-81)", appleMapsQuery: "Love's Travel Stop, I-81, VA" }, { label: "Bristol hotels", appleMapsQuery: "Hotels, Bristol, VA" }],
-    logistics: { groceries: "Food City / Ingles", groceriesQuery: "Food City, Abingdon, VA", gas: "I-81 / US-19", gasQuery: "Gas Station, I-81, Abingdon, VA" },
-    appleMapsQuery: "Abingdon, VA",
+    stepNumber: 3,
+    anchorRegion: "Appalachian South",
+    name: "Appalachian South",
+    shortName: "App South",
+    subtitle: "Northern Georgia mountains",
+    distance: "1180 mi",
+    totalMiles: 1180,
+    lat: 34.627,
+    lng: -83.193,
+    x: 66,
+    y: 39,
+    type: "stay-friendly",
+    appleMapsQuery: "Blue Ridge, GA",
+    candidateData: {
+      stayCandidates: [
+        { letter: "A", name: "Chattahoochee NF camping (planning)", appleMapsQuery: "Chattahoochee National Forest, GA" },
+        { letter: "B", name: "Mountain private camp options (planning)", appleMapsQuery: "Campground, Blue Ridge, GA" },
+      ],
+      dogWalkCandidates: { primary: "Mountain overlooks + forest paths", primaryQuery: "Blue Ridge, GA trails" },
+      emergencyCandidates: [{ label: "US-76 mountain services", appleMapsQuery: "Hospital, Blue Ridge, GA" }],
+      logistics: { groceries: "Ingles / Publix (planning)", gas: "US-76 stops (planning)" },
+    },
   },
   {
     id: "4",
-    name: "Asheville / Pisgah",
-    shortName: "Smokies Base",
-    distance: "820 mi",
-    totalMiles: 820,
-    subtitle: "Pisgah NF gateway",
-    x: 62,
-    y: 32,
-    lat: 35.5951,
-    lng: -82.5515,
-    status: "future",
-    stepNumber: 4,
+    leg: "outbound",
+    style: "scenic-outbound",
     phase: "outbound",
-    type: "stay-friendly",
-    stay: [
-      { letter: "A", name: "Pisgah NF campground (Davidson River)", appleMapsQuery: "Davidson River Campground, Pisgah Forest, NC" },
-      { letter: "B", name: "Pisgah NF dispersed", appleMapsQuery: "Pisgah National Forest, NC" },
-      { letter: "C", name: "Asheville area private", appleMapsQuery: "Campground, Asheville, NC" },
-      { letter: "D", name: "Walmart (Asheville / Canton)", appleMapsQuery: "Walmart, Canton, NC" },
-    ],
-    dog: { primary: "Pisgah NF trails", primaryQuery: "Pisgah National Forest, NC", secondary: "Blue Ridge Parkway overlooks", secondaryQuery: "Blue Ridge Parkway, NC" },
-    next: [{ label: "Great Smokies", stopId: "5" }, { label: "Midwest", stopId: "6" }],
-    emergency: [{ label: "Asheville hospitals", appleMapsQuery: "Mission Hospital, Asheville, NC" }, { label: "I-40 truck stops", appleMapsQuery: "Pilot Travel Center, I-40, NC" }],
-    logistics: { groceries: "Ingles / Earth Fare", groceriesQuery: "Ingles, Asheville, NC", gas: "I-40 / US-19", gasQuery: "Gas Station, I-40, Asheville, NC" },
-    appleMapsQuery: "Asheville, NC",
+    stepNumber: 4,
+    anchorRegion: "Southern Inland Connector",
+    name: "Southern Inland Connector",
+    shortName: "Southern Inland",
+    subtitle: "AL / MS / AR connector",
+    distance: "1520 mi",
+    totalMiles: 1520,
+    lat: 34.7465,
+    lng: -92.2896,
+    x: 53,
+    y: 46,
+    type: "transit",
+    appleMapsQuery: "Little Rock, AR",
+    candidateData: {
+      stayCandidates: [
+        { letter: "A", name: "State park connector camps (planning)", appleMapsQuery: "Pinnacle Mountain State Park, AR" },
+        { letter: "B", name: "Interstate private stays (planning)", appleMapsQuery: "Campground, Little Rock, AR" },
+      ],
+      dogWalkCandidates: { primary: "Riverfront greenway breaks", primaryQuery: "Arkansas River Trail" },
+      emergencyCandidates: [{ label: "I-40 inland services", appleMapsQuery: "Hospital, Little Rock, AR" }],
+      logistics: { groceries: "Kroger / Walmart (planning)", gas: "I-40 and I-30 fuel (planning)" },
+    },
   },
   {
     id: "5",
-    name: "Great Smoky Mountains",
-    shortName: "Great Smokies",
-    distance: "920 mi",
-    totalMiles: 920,
-    subtitle: "National Park",
-    x: 56,
-    y: 36,
-    lat: 35.6118,
-    lng: -83.4895,
-    status: "future",
-    stepNumber: 5,
+    leg: "outbound",
+    style: "scenic-outbound",
     phase: "outbound",
-    type: "stay-friendly",
-    stay: [
-      { letter: "A", name: "GSMNP campground (Cades Cove / Elkmont)", appleMapsQuery: "Elkmont Campground, Great Smoky Mountains, TN" },
-      { letter: "B", name: "Cherokee NF dispersed", appleMapsQuery: "Cherokee National Forest, TN" },
-      { letter: "C", name: "Gatlinburg / Townsend private", appleMapsQuery: "Campground, Gatlinburg, TN" },
-      { letter: "D", name: "Walmart (Sevierville)", appleMapsQuery: "Walmart, Sevierville, TN" },
-    ],
-    dog: { primary: "Gatlinburg Trail (only NP trail for dogs)", primaryQuery: "Gatlinburg Trail, Great Smoky Mountains, TN", secondary: "Cherokee NF trails", secondaryQuery: "Cherokee National Forest, TN", restrictions: "Dogs limited to 2 trails in GSMNP" },
-    next: [{ label: "Midwest transit", stopId: "6" }],
-    emergency: [{ label: "LeConte Medical Center", appleMapsQuery: "LeConte Medical Center, Sevierville, TN" }, { label: "Sevierville hotels", appleMapsQuery: "Hotels, Sevierville, TN" }],
-    logistics: { groceries: "Food City / Kroger", groceriesQuery: "Food City, Gatlinburg, TN", gas: "Gatlinburg / Pigeon Forge", gasQuery: "Gas Station, Pigeon Forge, TN" },
-    notes: "Dogs restricted in most of GSMNP - plan Cherokee NF alternatives",
-    appleMapsQuery: "Gatlinburg, TN",
+    stepNumber: 5,
+    anchorRegion: "High Plains Connector",
+    name: "High Plains Connector",
+    shortName: "High Plains",
+    subtitle: "Kansas / eastern Colorado",
+    distance: "2080 mi",
+    totalMiles: 2080,
+    lat: 38.9717,
+    lng: -95.2353,
+    x: 41,
+    y: 38,
+    type: "transit",
+    appleMapsQuery: "Topeka, KS",
+    candidateData: {
+      stayCandidates: [
+        { letter: "A", name: "Corps + state park camps (planning)", appleMapsQuery: "Clinton State Park, KS" },
+        { letter: "B", name: "I-70 corridor private options (planning)", appleMapsQuery: "Campground, Topeka, KS" },
+      ],
+      dogWalkCandidates: { primary: "Prairie trail breaks", primaryQuery: "Shunga Trail, Topeka, KS" },
+      emergencyCandidates: [{ label: "I-70 services", appleMapsQuery: "Hospital, Topeka, KS" }],
+      logistics: { groceries: "Dillons / Walmart (planning)", gas: "I-70 exits (planning)" },
+    },
   },
   {
     id: "6",
-    name: "Midwest Transit",
-    shortName: "Missouri / Iowa",
-    distance: "1,400 mi",
-    totalMiles: 1400,
-    subtitle: "Fast pass - minimal stop",
-    x: 45,
-    y: 32,
-    lat: 38.9517,
-    lng: -92.3341,
-    status: "future",
-    stepNumber: 6,
+    leg: "outbound",
+    style: "scenic-outbound",
     phase: "outbound",
-    type: "transit",
-    stay: [
-      { letter: "A", name: "Mark Twain NF campground", appleMapsQuery: "Mark Twain National Forest Campground, MO" },
-      { letter: "B", name: "Mark Twain NF dispersed", appleMapsQuery: "Mark Twain National Forest, MO" },
-      { letter: "C", name: "I-70 / I-80 corridor private", appleMapsQuery: "Campground, Columbia, MO" },
-      { letter: "D", name: "Pilot / Flying J overnight", appleMapsQuery: "Pilot Travel Center, Columbia, MO" },
-    ],
-    dog: { primary: "Mark Twain NF brief stops", primaryQuery: "Mark Twain National Forest, MO", secondary: "Rest areas", secondaryQuery: "Rest Area, I-70, MO" },
-    next: [{ label: "Badlands", stopId: "7" }],
-    emergency: [{ label: "I-70 / I-80 truck stops", appleMapsQuery: "Pilot Travel Center, I-70, MO" }, { label: "Walmart (Columbia / Des Moines)", appleMapsQuery: "Walmart, Columbia, MO" }],
-    logistics: { groceries: "Hy-Vee / Walmart", groceriesQuery: "Hy-Vee, Columbia, MO", gas: "Interstate exits", gasQuery: "Gas Station, I-70, Columbia, MO" },
-    notes: "Transit zone - keep moving toward Badlands",
-    appleMapsQuery: "Columbia, MO",
+    stepNumber: 6,
+    anchorRegion: "Rockies Approach",
+    name: "Rockies Approach",
+    shortName: "Rockies",
+    subtitle: "Front Range access",
+    distance: "2450 mi",
+    totalMiles: 2450,
+    lat: 39.7392,
+    lng: -104.9903,
+    x: 29,
+    y: 30,
+    type: "stay-friendly",
+    appleMapsQuery: "Denver, CO",
+    candidateData: {
+      stayCandidates: [
+        { letter: "A", name: "Foothill camp zones (planning)", appleMapsQuery: "Golden Gate Canyon State Park, CO" },
+        { letter: "B", name: "Front Range private stays (planning)", appleMapsQuery: "Campground, Denver, CO" },
+      ],
+      dogWalkCandidates: { primary: "Front range trailheads", primaryQuery: "Red Rocks Park, CO" },
+      emergencyCandidates: [{ label: "I-25 / I-70 metro services", appleMapsQuery: "Hospital, Denver, CO" }],
+      logistics: { groceries: "King Soopers (planning)", gas: "I-70 mountain approach fuel (planning)" },
+    },
   },
   {
     id: "7",
-    name: "Badlands / Black Hills",
-    shortName: "Badlands",
-    distance: "1,800 mi",
-    totalMiles: 1800,
-    subtitle: "South Dakota",
-    x: 35,
-    y: 22,
-    lat: 43.8554,
-    lng: -102.3397,
-    status: "future",
-    stepNumber: 7,
+    leg: "outbound",
+    style: "scenic-outbound",
     phase: "outbound",
-    type: "stay-friendly",
-    stay: [
-      { letter: "A", name: "Badlands NP campground (Sage Creek)", appleMapsQuery: "Sage Creek Campground, Badlands National Park, SD" },
-      { letter: "B", name: "Buffalo Gap NG dispersed", appleMapsQuery: "Buffalo Gap National Grassland, SD" },
-      { letter: "C", name: "Wall / Rapid City private", appleMapsQuery: "Campground, Rapid City, SD" },
-      { letter: "D", name: "Walmart (Rapid City)", appleMapsQuery: "Walmart, Rapid City, SD" },
-    ],
-    dog: { primary: "Buffalo Gap National Grassland", primaryQuery: "Buffalo Gap National Grassland, SD", secondary: "Black Hills NF trails", secondaryQuery: "Black Hills National Forest, SD" },
-    next: [{ label: "Yellowstone", stopId: "8" }],
-    emergency: [{ label: "Rapid City Regional Hospital", appleMapsQuery: "Rapid City Regional Hospital, SD" }, { label: "Wall truck stops", appleMapsQuery: "Travel Center, Wall, SD" }],
-    logistics: { groceries: "Safeway (Rapid City)", groceriesQuery: "Safeway, Rapid City, SD", gas: "I-90 corridor", gasQuery: "Gas Station, I-90, Rapid City, SD" },
-    appleMapsQuery: "Badlands National Park, SD",
+    stepNumber: 7,
+    anchorRegion: "Yellowstone",
+    name: "Yellowstone",
+    shortName: "Yellowstone",
+    subtitle: "Primary western scenic anchor",
+    distance: "2920 mi",
+    totalMiles: 2920,
+    lat: 44.428,
+    lng: -110.5885,
+    x: 19,
+    y: 20,
+    type: "scenic-only",
+    notes: "Scenic anchor. Dog access is restricted in many park areas.",
+    appleMapsQuery: "Yellowstone National Park",
+    candidateData: {
+      stayCandidates: [
+        { letter: "A", name: "Gateway town campgrounds (planning)", appleMapsQuery: "West Yellowstone, MT campgrounds" },
+        { letter: "B", name: "National forest alternatives (planning)", appleMapsQuery: "Gallatin National Forest" },
+      ],
+      dogWalkCandidates: {
+        primary: "Gateway town walks + NF alternatives",
+        primaryQuery: "West Yellowstone, MT",
+        restrictions: "Most park trails restrict dogs",
+      },
+      emergencyCandidates: [{ label: "Park gateway services", appleMapsQuery: "Hospital, Bozeman, MT" }],
+      logistics: { groceries: "Gateway supermarkets (planning)", gas: "Park gateway fuel (planning)" },
+    },
   },
   {
     id: "8",
-    name: "Yellowstone",
-    shortName: "Yellowstone",
-    distance: "2,200 mi",
-    totalMiles: 2200,
-    subtitle: "Scenic only - dog restrictions",
-    x: 25,
-    y: 18,
-    lat: 44.4280,
-    lng: -110.5885,
-    status: "future",
+    leg: "outbound",
+    style: "scenic-outbound",
+    phase: "turning-point",
     stepNumber: 8,
-    phase: "outbound",
+    anchorRegion: "Grand Teton (optional)",
+    name: "Grand Teton (Optional)",
+    shortName: "Grand Teton",
+    subtitle: "Optional adjacent scenic anchor",
+    distance: "3010 mi",
+    totalMiles: 3010,
+    lat: 43.7904,
+    lng: -110.6818,
+    x: 20,
+    y: 24,
     type: "scenic-only",
-    stay: [
-      { letter: "A", name: "Yellowstone NP campground (limited)", appleMapsQuery: "Madison Campground, Yellowstone National Park, WY" },
-      { letter: "B", name: "Gallatin / Shoshone NF dispersed", appleMapsQuery: "Gallatin National Forest, MT" },
-      { letter: "C", name: "West Yellowstone / Cody private", appleMapsQuery: "Campground, West Yellowstone, MT" },
-      { letter: "D", name: "Walmart (West Yellowstone)", appleMapsQuery: "Walmart, West Yellowstone, MT" },
-    ],
-    dog: { primary: "Dogs NOT allowed on trails/boardwalks", primaryQuery: "Yellowstone National Park, WY", secondary: "Gallatin NF outside park", secondaryQuery: "Gallatin National Forest, MT", restrictions: "Dogs restricted to parking lots, campgrounds, roads only" },
-    next: [{ label: "Utah", stopId: "9" }],
-    emergency: [{ label: "West Yellowstone clinic", appleMapsQuery: "Clinic, West Yellowstone, MT" }, { label: "Bozeman hospital", appleMapsQuery: "Bozeman Health, Bozeman, MT" }],
-    logistics: { groceries: "Albertsons (West Yellowstone)", groceriesQuery: "Albertsons, West Yellowstone, MT", gas: "Park entrances", gasQuery: "Gas Station, West Yellowstone, MT" },
-    notes: "SCENIC ONLY - dogs cannot hike. Drive through for views, stay in national forest outside.",
-    appleMapsQuery: "West Yellowstone, MT",
+    notes: "Optional stop before starting return leg.",
+    appleMapsQuery: "Grand Teton National Park",
+    candidateData: {
+      stayCandidates: [
+        { letter: "A", name: "Jackson area camp options (planning)", appleMapsQuery: "Campground, Jackson, WY" },
+        { letter: "B", name: "Bridger-Teton NF alternatives (planning)", appleMapsQuery: "Bridger-Teton National Forest" },
+      ],
+      dogWalkCandidates: { primary: "Jackson valley paths", primaryQuery: "Jackson, WY trails", restrictions: "Park trail restrictions may apply" },
+      emergencyCandidates: [{ label: "Jackson gateway services", appleMapsQuery: "Hospital, Jackson, WY" }],
+      logistics: { groceries: "Jackson grocery stops (planning)", gas: "US-191 / US-26 fuel (planning)" },
+    },
   },
   {
     id: "9",
-    name: "Utah Parks",
-    shortName: "Utah",
-    distance: "2,600 mi",
-    totalMiles: 2600,
-    subtitle: "Zion / Bryce / Escalante",
-    x: 18,
-    y: 42,
-    lat: 37.0474,
-    lng: -111.9429,
-    status: "future",
+    leg: "return",
+    style: "scenic-return",
+    phase: "return",
     stepNumber: 9,
-    phase: "outbound",
-    type: "stay-friendly",
-    stay: [
-      { letter: "A", name: "Dixie NF campground", appleMapsQuery: "Dixie National Forest Campground, UT" },
-      { letter: "B", name: "BLM land dispersed (Escalante)", appleMapsQuery: "Grand Staircase-Escalante, UT" },
-      { letter: "C", name: "Springdale / Kanab private", appleMapsQuery: "Campground, Kanab, UT" },
-      { letter: "D", name: "Walmart (St. George / Cedar City)", appleMapsQuery: "Walmart, St. George, UT" },
-    ],
-    dog: { primary: "BLM land - wide open", primaryQuery: "Grand Staircase-Escalante, UT", secondary: "Dixie NF trails", secondaryQuery: "Dixie National Forest, UT", restrictions: "Dogs limited in Zion/Bryce NPs" },
-    next: [{ label: "Nevada transit", stopId: "10" }, { label: "California", stopId: "11" }],
-    emergency: [{ label: "St. George hospital", appleMapsQuery: "St. George Regional Hospital, UT" }, { label: "Cedar City hotels", appleMapsQuery: "Hotels, Cedar City, UT" }],
-    logistics: { groceries: "Smith's / Walmart", groceriesQuery: "Smith's, Kanab, UT", gas: "I-15 corridor", gasQuery: "Gas Station, I-15, UT" },
-    notes: "BLM land = best dog freedom of the trip. National parks restrict dogs.",
-    appleMapsQuery: "Kanab, UT",
+    anchorRegion: "Northern Interior Corridor",
+    name: "Northern Interior Corridor",
+    shortName: "Northern Interior",
+    subtitle: "Montana / Dakotas transit",
+    distance: "3500 mi",
+    totalMiles: 3500,
+    lat: 46.8083,
+    lng: -100.7837,
+    x: 38,
+    y: 16,
+    type: "transit",
+    appleMapsQuery: "Bismarck, ND",
+    candidateData: {
+      stayCandidates: [
+        { letter: "A", name: "Prairie camp options (planning)", appleMapsQuery: "Campground, Bismarck, ND" },
+        { letter: "B", name: "Interstate overnight connectors (planning)", appleMapsQuery: "Travel Center, Bismarck, ND" },
+      ],
+      dogWalkCandidates: { primary: "Riverside trail breaks", primaryQuery: "Missouri River trails, ND" },
+      emergencyCandidates: [{ label: "I-94 corridor services", appleMapsQuery: "Hospital, Bismarck, ND" }],
+      logistics: { groceries: "Target / Walmart (planning)", gas: "I-94 exits (planning)" },
+    },
   },
   {
     id: "10",
-    name: "Nevada Transit",
-    shortName: "Nevada",
-    distance: "2,900 mi",
-    totalMiles: 2900,
-    subtitle: "Fast pass to coast",
-    x: 10,
-    y: 50,
-    lat: 39.5296,
-    lng: -119.8138,
-    status: "future",
+    leg: "return",
+    style: "scenic-return",
+    phase: "return",
     stepNumber: 10,
-    phase: "outbound",
-    type: "transit",
-    stay: [
-      { letter: "A", name: "Humboldt-Toiyabe NF campground", appleMapsQuery: "Humboldt-Toiyabe National Forest Campground, NV" },
-      { letter: "B", name: "BLM dispersed (many options)", appleMapsQuery: "BLM Land, Nevada" },
-      { letter: "C", name: "Reno area private", appleMapsQuery: "Campground, Reno, NV" },
-      { letter: "D", name: "Casino parking (many allow overnight)", appleMapsQuery: "Casino, Reno, NV" },
-    ],
-    dog: { primary: "BLM land - open desert", primaryQuery: "BLM Land, Nevada", secondary: "Humboldt NF trails", secondaryQuery: "Humboldt-Toiyabe National Forest, NV" },
-    next: [{ label: "N California", stopId: "11" }],
-    emergency: [{ label: "Reno hospitals", appleMapsQuery: "Renown Regional Medical Center, Reno, NV" }, { label: "I-80 truck stops", appleMapsQuery: "Pilot Travel Center, I-80, Reno, NV" }],
-    logistics: { groceries: "Raley's / Walmart (Reno)", groceriesQuery: "Raley's, Reno, NV", gas: "I-80 corridor", gasQuery: "Gas Station, I-80, Reno, NV" },
-    notes: "Transit zone - push through to coast",
-    appleMapsQuery: "Reno, NV",
+    anchorRegion: "Great Lakes / Midwest",
+    name: "Great Lakes / Midwest",
+    shortName: "Great Lakes",
+    subtitle: "Wisconsin / Michigan corridor",
+    distance: "4060 mi",
+    totalMiles: 4060,
+    lat: 44.5133,
+    lng: -88.0133,
+    x: 58,
+    y: 18,
+    type: "stay-friendly",
+    appleMapsQuery: "Green Bay, WI",
+    candidateData: {
+      stayCandidates: [
+        { letter: "A", name: "Lakeside state park options (planning)", appleMapsQuery: "Peninsula State Park, WI" },
+        { letter: "B", name: "Midwest private camp options (planning)", appleMapsQuery: "Campground, Green Bay, WI" },
+      ],
+      dogWalkCandidates: { primary: "Lakefront and rail-trail walks", primaryQuery: "Fox River Trail, WI" },
+      emergencyCandidates: [{ label: "US-41 and I-43 services", appleMapsQuery: "Hospital, Green Bay, WI" }],
+      logistics: { groceries: "Meijer / Festival Foods (planning)", gas: "Great Lakes corridor fuel (planning)" },
+    },
   },
-  // TURNING POINT (11)
   {
     id: "11",
-    name: "Northern California Coast",
-    shortName: "N California",
-    distance: "3,200 mi",
-    totalMiles: 3200,
-    subtitle: "TURNING POINT - dog beaches",
-    x: 5,
-    y: 58,
-    lat: 39.4457,
-    lng: -123.8053,
-    status: "future",
+    leg: "return",
+    style: "scenic-return",
+    phase: "return",
     stepNumber: 11,
-    phase: "turning-point",
-    type: "stay-friendly",
-    stay: [
-      { letter: "A", name: "State park campgrounds (reservations)", appleMapsQuery: "MacKerricher State Park, Fort Bragg, CA" },
-      { letter: "B", name: "National forest dispersed", appleMapsQuery: "Mendocino National Forest, CA" },
-      { letter: "C", name: "Mendocino / Fort Bragg private", appleMapsQuery: "Campground, Fort Bragg, CA" },
-      { letter: "D", name: "Walmart (Ukiah)", appleMapsQuery: "Walmart, Ukiah, CA" },
-    ],
-    dog: { primary: "Dog-friendly beaches - Fort Bragg, Mendocino", primaryQuery: "Glass Beach, Fort Bragg, CA", secondary: "Redwood forest trails (leashed)", secondaryQuery: "Jackson Demonstration State Forest, CA" },
-    next: [{ label: "Oregon Coast", stopId: "12" }],
-    emergency: [{ label: "Mendocino Coast Hospital", appleMapsQuery: "Mendocino Coast District Hospital, Fort Bragg, CA" }, { label: "Fort Bragg hotels", appleMapsQuery: "Hotels, Fort Bragg, CA" }],
-    logistics: { groceries: "Harvest Market / Safeway", groceriesQuery: "Harvest Market, Fort Bragg, CA", gas: "Highway 1 towns", gasQuery: "Gas Station, Fort Bragg, CA" },
-    notes: "TURNING POINT - relax here. Dog beaches, redwoods, coastal views.",
-    appleMapsQuery: "Fort Bragg, CA",
+    anchorRegion: "Pennsylvania Interior",
+    name: "Pennsylvania Interior",
+    shortName: "PA Interior",
+    subtitle: "Central PA return corridor",
+    distance: "4540 mi",
+    totalMiles: 4540,
+    lat: 40.7934,
+    lng: -77.86,
+    x: 76,
+    y: 24,
+    type: "transit",
+    appleMapsQuery: "State College, PA",
+    candidateData: {
+      stayCandidates: [
+        { letter: "A", name: "State forest stays (planning)", appleMapsQuery: "Bald Eagle State Forest, PA" },
+        { letter: "B", name: "I-80 private options (planning)", appleMapsQuery: "Campground, State College, PA" },
+      ],
+      dogWalkCandidates: { primary: "State forest trail breaks", primaryQuery: "Bald Eagle State Park, PA" },
+      emergencyCandidates: [{ label: "I-80 service exits", appleMapsQuery: "Hospital, State College, PA" }],
+      logistics: { groceries: "Wegmans / Giant (planning)", gas: "I-80 fuel (planning)" },
+    },
   },
-  // RETURN ROUTE (12-17) - Pushed North for variety
   {
     id: "12",
-    name: "Oregon Coast",
-    shortName: "Oregon Coast",
-    distance: "3,600 mi",
-    totalMiles: 3600,
-    subtitle: "Coastal route north",
-    x: 5,
-    y: 40,
-    lat: 43.3665,
-    lng: -124.2179,
-    status: "future",
-    stepNumber: 12,
+    leg: "return",
+    style: "scenic-return",
     phase: "return",
-    type: "stay-friendly",
-    stay: [
-      { letter: "A", name: "Oregon Dunes NRA campground", appleMapsQuery: "Oregon Dunes National Recreation Area, OR" },
-      { letter: "B", name: "Siuslaw NF dispersed", appleMapsQuery: "Siuslaw National Forest, OR" },
-      { letter: "C", name: "Florence / Coos Bay private", appleMapsQuery: "Campground, Florence, OR" },
-      { letter: "D", name: "Walmart (Coos Bay)", appleMapsQuery: "Walmart, Coos Bay, OR" },
-    ],
-    dog: { primary: "Oregon beaches - most dog-friendly", primaryQuery: "Oregon Dunes Beach, OR", secondary: "Oregon Dunes hiking", secondaryQuery: "Oregon Dunes National Recreation Area, OR", restrictions: "Some seasonal bird nesting closures" },
-    next: [{ label: "Idaho", stopId: "13" }],
-    emergency: [{ label: "Bay Area Hospital (Coos Bay)", appleMapsQuery: "Bay Area Hospital, Coos Bay, OR" }, { label: "Florence hotels", appleMapsQuery: "Hotels, Florence, OR" }],
-    logistics: { groceries: "Fred Meyer / Safeway", groceriesQuery: "Fred Meyer, Florence, OR", gas: "Highway 101", gasQuery: "Gas Station, Highway 101, Florence, OR" },
-    notes: "Beautiful coastal drive - dogs allowed on most Oregon beaches",
-    appleMapsQuery: "Coos Bay, OR",
+    stepNumber: 12,
+    anchorRegion: "New York Interior",
+    name: "New York Interior",
+    shortName: "NY Interior",
+    subtitle: "Adirondack / capital region",
+    distance: "4860 mi",
+    totalMiles: 4860,
+    lat: 42.6526,
+    lng: -73.7562,
+    x: 85,
+    y: 16,
+    type: "transit",
+    appleMapsQuery: "Albany, NY",
+    candidateData: {
+      stayCandidates: [
+        { letter: "A", name: "Interior NY camps (planning)", appleMapsQuery: "Campground, Albany, NY" },
+        { letter: "B", name: "Thruway connector stays (planning)", appleMapsQuery: "Travel Center, Albany, NY" },
+      ],
+      dogWalkCandidates: { primary: "Mohawk-Hudson trail segments", primaryQuery: "Mohawk-Hudson Bike-Hike Trail" },
+      emergencyCandidates: [{ label: "I-87 / I-90 services", appleMapsQuery: "Hospital, Albany, NY" }],
+      logistics: { groceries: "Hannaford (planning)", gas: "NYS thruway fuel (planning)" },
+    },
   },
   {
     id: "13",
-    name: "Idaho Panhandle",
-    shortName: "Idaho",
-    distance: "4,100 mi",
-    totalMiles: 4100,
-    subtitle: "Coeur d'Alene area",
-    x: 15,
-    y: 18,
-    lat: 47.6777,
-    lng: -116.7805,
-    status: "future",
+    leg: "return",
+    style: "scenic-return",
+    phase: "return",
     stepNumber: 13,
-    phase: "return",
-    type: "stay-friendly",
-    stay: [
-      { letter: "A", name: "Idaho Panhandle NF campground", appleMapsQuery: "Idaho Panhandle National Forest Campground, ID" },
-      { letter: "B", name: "Idaho Panhandle NF dispersed", appleMapsQuery: "Idaho Panhandle National Forest, ID" },
-      { letter: "C", name: "Coeur d'Alene area private", appleMapsQuery: "Campground, Coeur d'Alene, ID" },
-      { letter: "D", name: "Walmart (Post Falls)", appleMapsQuery: "Walmart, Post Falls, ID" },
-    ],
-    dog: { primary: "Idaho Panhandle NF trails", primaryQuery: "Idaho Panhandle National Forest, ID", secondary: "Coeur d'Alene lakefront", secondaryQuery: "Coeur d'Alene Lake, ID" },
-    next: [{ label: "Montana", stopId: "14" }],
-    emergency: [{ label: "Kootenai Health (Coeur d'Alene)", appleMapsQuery: "Kootenai Health, Coeur d'Alene, ID" }, { label: "I-90 truck stops", appleMapsQuery: "Pilot Travel Center, I-90, ID" }],
-    logistics: { groceries: "WinCo / Safeway", groceriesQuery: "WinCo Foods, Coeur d'Alene, ID", gas: "I-90 corridor", gasQuery: "Gas Station, I-90, Coeur d'Alene, ID" },
-    appleMapsQuery: "Coeur d'Alene, ID",
-  },
-  {
-    id: "14",
-    name: "Montana Glacier Area",
-    shortName: "Montana",
-    distance: "4,400 mi",
-    totalMiles: 4400,
-    subtitle: "Flathead NF / Glacier Gateway",
-    x: 25,
+    anchorRegion: "Home",
+    name: "Home Corridor",
+    shortName: "Home Stretch",
+    subtitle: "Final New England return",
+    distance: "5100 mi",
+    totalMiles: 5100,
+    lat: 42.3601,
+    lng: -71.0589,
+    x: 90,
     y: 10,
-    lat: 48.3118,
-    lng: -114.3533,
-    status: "future",
-    stepNumber: 14,
-    phase: "return",
-    type: "stay-friendly",
-    stay: [
-      { letter: "A", name: "Flathead NF campground", appleMapsQuery: "Flathead National Forest Campground, MT" },
-      { letter: "B", name: "Flathead NF dispersed", appleMapsQuery: "Flathead National Forest, MT" },
-      { letter: "C", name: "Kalispell / Whitefish private", appleMapsQuery: "Campground, Whitefish, MT" },
-      { letter: "D", name: "Walmart (Kalispell)", appleMapsQuery: "Walmart, Kalispell, MT" },
-    ],
-    dog: { primary: "Flathead NF trails (no grizzly closures)", primaryQuery: "Flathead National Forest, MT", secondary: "Whitefish town trails", secondaryQuery: "Whitefish Trail, MT", restrictions: "Dogs limited in Glacier NP" },
-    next: [{ label: "North Dakota", stopId: "15" }],
-    emergency: [{ label: "Kalispell Regional Medical", appleMapsQuery: "Kalispell Regional Medical Center, MT" }, { label: "US-2 hotels", appleMapsQuery: "Hotels, Kalispell, MT" }],
-    logistics: { groceries: "Safeway / Super 1", groceriesQuery: "Safeway, Kalispell, MT", gas: "US-2 / US-93", gasQuery: "Gas Station, US-93, Kalispell, MT" },
-    notes: "Stay in Flathead NF - Glacier NP restricts dogs significantly",
-    appleMapsQuery: "Kalispell, MT",
-  },
-  {
-    id: "15",
-    name: "North Dakota / Minnesota",
-    shortName: "ND / MN",
-    distance: "5,000 mi",
-    totalMiles: 5000,
-    subtitle: "Theodore Roosevelt NP area",
-    x: 45,
-    y: 12,
-    lat: 46.9769,
-    lng: -103.5387,
-    status: "future",
-    stepNumber: 15,
-    phase: "return",
-    type: "stay-friendly",
-    stay: [
-      { letter: "A", name: "Theodore Roosevelt NP campground", appleMapsQuery: "Cottonwood Campground, Theodore Roosevelt National Park, ND" },
-      { letter: "B", name: "Dakota Prairie NG dispersed", appleMapsQuery: "Dakota Prairie National Grassland, ND" },
-      { letter: "C", name: "Medora / Dickinson private", appleMapsQuery: "Campground, Medora, ND" },
-      { letter: "D", name: "Walmart (Dickinson)", appleMapsQuery: "Walmart, Dickinson, ND" },
-    ],
-    dog: { primary: "Dakota Prairie National Grassland", primaryQuery: "Dakota Prairie National Grassland, ND", secondary: "Theodore Roosevelt NP (leashed)", secondaryQuery: "Theodore Roosevelt National Park, ND", restrictions: "Dogs on leash in NP" },
-    next: [{ label: "Wisconsin", stopId: "16" }],
-    emergency: [{ label: "CHI St. Alexius (Dickinson)", appleMapsQuery: "CHI St. Alexius Health, Dickinson, ND" }, { label: "I-94 truck stops", appleMapsQuery: "Pilot Travel Center, I-94, Dickinson, ND" }],
-    logistics: { groceries: "Cashwise Foods / Walmart", groceriesQuery: "Cashwise Foods, Dickinson, ND", gas: "I-94 corridor", gasQuery: "Gas Station, I-94, Dickinson, ND" },
-    appleMapsQuery: "Medora, ND",
-  },
-  {
-    id: "16",
-    name: "Wisconsin / Upper Michigan",
-    shortName: "WI / UP",
-    distance: "5,600 mi",
-    totalMiles: 5600,
-    subtitle: "Great Lakes route",
-    x: 62,
-    y: 14,
-    lat: 46.5436,
-    lng: -87.3953,
-    status: "future",
-    stepNumber: 16,
-    phase: "return",
-    type: "stay-friendly",
-    stay: [
-      { letter: "A", name: "Hiawatha NF campground", appleMapsQuery: "Hiawatha National Forest Campground, MI" },
-      { letter: "B", name: "National forest dispersed", appleMapsQuery: "Hiawatha National Forest, MI" },
-      { letter: "C", name: "Marquette area private", appleMapsQuery: "Campground, Marquette, MI" },
-      { letter: "D", name: "Walmart (Marquette)", appleMapsQuery: "Walmart, Marquette, MI" },
-    ],
-    dog: { primary: "Hiawatha NF trails", primaryQuery: "Hiawatha National Forest, MI", secondary: "Lake Superior shoreline", secondaryQuery: "Lake Superior, Marquette, MI" },
-    next: [{ label: "Northeast", stopId: "17" }],
-    emergency: [{ label: "UP Health System (Marquette)", appleMapsQuery: "UP Health System, Marquette, MI" }, { label: "US-2 / US-41 hotels", appleMapsQuery: "Hotels, Marquette, MI" }],
-    logistics: { groceries: "Tadych's Econo Foods / Walmart", groceriesQuery: "Walmart, Marquette, MI", gas: "US-2 / US-41", gasQuery: "Gas Station, US-41, Marquette, MI" },
-    notes: "Beautiful Great Lakes scenery - different from outbound route",
-    appleMapsQuery: "Marquette, MI",
-  },
-  {
-    id: "17",
-    name: "Upstate NY / Vermont",
-    shortName: "NY / VT",
-    distance: "6,100 mi",
-    totalMiles: 6100,
-    subtitle: "Final stretch - Adirondacks",
-    x: 85,
-    y: 10,
-    lat: 44.0012,
-    lng: -73.7503,
-    status: "future",
-    stepNumber: 17,
-    phase: "return",
     type: "transit",
-    stay: [
-      { letter: "A", name: "Green Mountain NF campground", appleMapsQuery: "Green Mountain National Forest Campground, VT" },
-      { letter: "B", name: "Adirondack Park dispersed", appleMapsQuery: "Adirondack Park, NY" },
-      { letter: "C", name: "Lake Placid / Burlington private", appleMapsQuery: "Campground, Lake Placid, NY" },
-      { letter: "D", name: "Walmart (Plattsburgh)", appleMapsQuery: "Walmart, Plattsburgh, NY" },
-    ],
-    dog: { primary: "Adirondack trails", primaryQuery: "Adirondack Park, NY", secondary: "Green Mountain NF", secondaryQuery: "Green Mountain National Forest, VT" },
-    next: [{ label: "Gloucester", stopId: "0" }],
-    emergency: [{ label: "UVM Medical Center (Burlington)", appleMapsQuery: "UVM Medical Center, Burlington, VT" }, { label: "I-87 / I-89 hotels", appleMapsQuery: "Hotels, Lake Placid, NY" }],
-    logistics: { groceries: "Hannaford / Price Chopper", groceriesQuery: "Hannaford, Lake Placid, NY", gas: "I-87 / I-89", gasQuery: "Gas Station, I-87, Lake Placid, NY" },
-    notes: "Almost home - beautiful New England finish through mountains",
-    appleMapsQuery: "Lake Placid, NY",
+    appleMapsQuery: "Boston, MA",
+    candidateData: {
+      stayCandidates: [
+        { letter: "A", name: "Final push to home (planning)", appleMapsQuery: "Gloucester, MA" },
+        { letter: "B", name: "Metro north shore stopover (planning)", appleMapsQuery: "Campground, North Shore, MA" },
+      ],
+      dogWalkCandidates: { primary: "North shore coastal trails", primaryQuery: "Lynn Woods Reservation, MA" },
+      emergencyCandidates: [{ label: "I-95 / Route 128 services", appleMapsQuery: "Hospital, Boston, MA" }],
+      logistics: { groceries: "Stop & Shop (planning)", gas: "I-95 corridor fuel (planning)" },
+    },
   },
 ]
+
+export const stopsData: StopData[] = routeSeeds.map((seed, index) => ({
+  id: seed.id,
+  anchorRegion: seed.anchorRegion,
+  name: seed.name,
+  shortName: seed.shortName,
+  distance: seed.distance,
+  totalMiles: seed.totalMiles,
+  subtitle: seed.subtitle,
+  x: seed.x,
+  y: seed.y,
+  lat: seed.lat,
+  lng: seed.lng,
+  phase: seed.phase,
+  type: seed.type,
+  notes: seed.notes,
+  stepNumber: seed.stepNumber,
+  routeLeg: seed.leg,
+  routeStyle: seed.style,
+  status: index === 0 ? "start" : "future",
+  stay: seed.candidateData.stayCandidates,
+  dog: seed.candidateData.dogWalkCandidates,
+  emergency: seed.candidateData.emergencyCandidates,
+  logistics: seed.candidateData.logistics,
+  next: index < routeSeeds.length - 1 ? [{ label: routeSeeds[index + 1].shortName, stopId: routeSeeds[index + 1].id }] : [{ label: "Home", stopId: "0" }],
+  appleMapsQuery: seed.appleMapsQuery,
+}))
 
 export function getStopById(id: string): StopData | undefined {
   return stopsData.find((stop) => stop.id === id)
@@ -534,6 +578,10 @@ export function getStopsByPhase(phase: RoutePhase): StopData[] {
   return stopsData.filter((stop) => stop.phase === phase)
 }
 
+export function getRouteStopsByLeg(leg: RouteLegId): StopData[] {
+  return stopsData.filter((stop) => stop.routeLeg === leg)
+}
+
 export function calculateProgress(currentStopId: string): number {
   const currentStop = getStopById(currentStopId)
   if (!currentStop) return 0
@@ -542,7 +590,7 @@ export function calculateProgress(currentStopId: string): number {
 }
 
 export function findNearestStop(lat: number, lng: number): { stop: StopData; distanceMiles: number } | null {
-  const R = 3959 // Earth's radius in miles
+  const R = 3959
   let closestStop: StopData | null = null
   let minDistance = Infinity
 
