@@ -190,6 +190,9 @@ function buildStayOptions(stop: BaselineRouteStop): StayOption[] {
 }
 
 assertContinuousRoute(baselineRoute1)
+if (baselineRoute1.length !== 35) {
+  throw new Error(`Expected 35 baseline stops, received ${baselineRoute1.length}`)
+}
 
 export const stopsData: StopData[] = [
   {
@@ -226,7 +229,7 @@ export const stopsData: StopData[] = [
     const phase: RoutePhase = stop.step < 19 ? "outbound" : stop.step === 19 ? "turning-point" : "return"
     const routeLeg: RouteLegId = phase === "return" || phase === "turning-point" ? "return" : "outbound"
     const routeStyle: RouteStyle = routeLeg === "return" ? "scenic-return" : "scenic-outbound"
-    const point = coords[stop.step]
+    const point = coords[stop.step] ?? { lat: 39.5, lng: -98.35, x: 50, y: 25 }
     const plannedStayLabel = formatPlannedStay(stop.plannedStayDays)
 
     return {
