@@ -18,6 +18,7 @@ import { ChatPanel } from "@/components/chat-panel"
 import { Navigation, X, ChevronRight, MapPin as MapPinIcon, Clock, Dog } from "lucide-react"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useRouter } from "next/navigation"
+import { buildTripProgressSummary, detectOffRouteStatus, liveTripStateMock } from "@/lib/trip-progress"
 
 type Screen = "map" | "what-now" | "emergency" | "stop-detail" | "select-location"
 type Popup = "what-now" | "next-stop" | "emergency" | null
@@ -33,6 +34,8 @@ export default function RoadTripPlanner() {
   const [showLocationPrompt, setShowLocationPrompt] = useState(false)
   const [stopPopupId, setStopPopupId] = useState<string | null>(null) // For stop marker panel
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number; accuracy?: number } | null>(null)
+  const [offRoutePromptSnoozedUntil, setOffRoutePromptSnoozedUntil] = useState<number | null>(null)
+  const [offRoutePromptDismissed, setOffRoutePromptDismissed] = useState(false)
   
   // Trip state
   const [currentStopId, setCurrentStopId] = useState("0") // Start at Gloucester
@@ -52,6 +55,31 @@ export default function RoadTripPlanner() {
   } = useGeolocation()
 
   const currentStop = getStopById(currentStopId)
+  const currentStep = Number.parseInt(currentStopId, 10)
+  const routeStopsForProgress = useMemo(() => stopsData.filter((stop) => stop.id !== "0"), [])
+  const tripNow = userLocation ? new Date() : new Date(liveTripStateMock.now)
+  const liveTripState = useMemo(
+    () => ({
+      ...liveTripStateMock,
+      currentStep: Number.isNaN(currentStep) || currentStep < 1 ? liveTripStateMock.currentStep : currentStep,
+      now: tripNow.toISOString(),
+      currentLat: userLocation?.lat ?? null,
+      currentLng: userLocation?.lng ?? null,
+    }),
+    [currentStep, tripNow, userLocation]
+  )
+  const tripSummary = useMemo(
+    () =>
+      buildTripProgressSummary({
+        routeStops: routeStopsForProgress,
+        currentStep: liveTripState.currentStep,
+        tripStartDate: liveTripState.tripStartDate,
+        currentStopArrivalDate: liveTripState.currentStopArrivalDate,
+        plannedStayDays: currentStop?.plannedStayDays ?? 0,
+        now: liveTripState.now,
+      }),
+    [currentStop?.plannedStayDays, liveTripState, routeStopsForProgress]
+  )
   const routeContext = useMemo(
     () =>
       createRouteDecisionContext({
@@ -62,6 +90,24 @@ export default function RoadTripPlanner() {
   )
   const nextStopDecision = useMemo(() => getNextStops(routeContext, routeStrategy), [routeContext, routeStrategy])
   const nextStop = getStopById(nextStopId) ?? nextStopDecision.primaryStop
+  const offRouteStatus = useMemo(
+    () =>
+      detectOffRouteStatus({
+        currentLat: liveTripState.currentLat,
+        currentLng: liveTripState.currentLng,
+        currentStopLat: currentStop?.lat ?? 0,
+        currentStopLng: currentStop?.lng ?? 0,
+        nextStopLat: nextStop?.lat ?? 0,
+        nextStopLng: nextStop?.lng ?? 0,
+        minutesOffRoute: liveTripState.offRouteMinutes,
+      }),
+    [currentStop?.lat, currentStop?.lng, liveTripState.currentLat, liveTripState.currentLng, liveTripState.offRouteMinutes, nextStop?.lat, nextStop?.lng]
+  )
+  const canShowOffRoutePrompt = Boolean(
+    offRouteStatus.prompt &&
+    !offRoutePromptDismissed &&
+    (offRoutePromptSnoozedUntil === null || tripNow.getTime() > offRoutePromptSnoozedUntil)
+  )
   const progress = calculateProgress(currentStopId)
 
   // Determine destination for progress bar
@@ -364,6 +410,40 @@ export default function RoadTripPlanner() {
               phase={tripCompleted ? "return" : (currentStop?.phase || "outbound")}
               tripCompleted={tripCompleted}
             />
+          </div>
+          <div className="px-4 pb-2 space-y-2">
+            <div className="rounded-xl border border-border/50 bg-card p-3">
+              <p className="text-xs text-muted-foreground">{tripSummary.dayLabel}</p>
+              <p className="text-sm font-medium text-foreground">Trip progress: {tripSummary.dayProgressPercent}%</p>
+              <p className="text-xs text-muted-foreground">{tripSummary.distanceLabel}</p>
+              <p className="text-xs text-muted-foreground">{tripSummary.nextLegLabel}</p>
+              <p className="text-xs text-muted-foreground">Distance completion: {tripSummary.distanceProgressPercent}%</p>
+            </div>
+
+            {tripSummary.stayWarning && (
+              <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-800">
+                {tripSummary.stayWarning}
+              </div>
+            )}
+
+            {canShowOffRoutePrompt && (
+              <div className="rounded-xl border border-primary/40 bg-primary/10 px-3 py-2">
+                <p className="text-xs text-foreground">You seem to be off route. Switch to Flex Mode?</p>
+                <div className="mt-2 flex items-center gap-2">
+                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setOffRoutePromptDismissed(true)}>
+                    Dismiss
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    onClick={() => setOffRoutePromptSnoozedUntil(Date.now() + 60 * 60 * 1000)}
+                  >
+                    Snooze 1h
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
 
         {/* Map Section - fills remaining space */}

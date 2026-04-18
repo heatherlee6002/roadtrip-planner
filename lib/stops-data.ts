@@ -66,6 +66,8 @@ export interface StopData {
   driveTimeFromPrev: string
   stayDuration: string
   plannedStayLabel: string
+  plannedStayDays: number
+  distanceMilesToNext: number
   highlights: string[]
   dogWalks: DogWalk[]
   areaWarnings: AreaWarning
@@ -83,6 +85,11 @@ export interface StopData {
   lng: number
   next: { label: string; stopId?: string }[]
   appleMapsQuery: string
+}
+
+export interface BaselineRouteDistance {
+  step: number
+  distanceMilesToNext: number
 }
 
 export const baselineRoute1: BaselineRouteStop[] = [
@@ -121,6 +128,45 @@ export const baselineRoute1: BaselineRouteStop[] = [
   { step: 33, name: "Ohio transition stop", region: "Ohio", type: "transit", driveHoursFromPrevious: 4.5, plannedStayDays: 1, dogPlan: "Park-based dog break stop", notes: "Keeps the home stretch realistic." },
   { step: 34, name: "Pennsylvania transition stop", region: "Pennsylvania", type: "transit", driveHoursFromPrevious: 4.5, plannedStayDays: 1, dogPlan: "Local park and open-space walk", notes: "Last sleep stop before home." },
   { step: 35, name: "Gloucester", region: "Massachusetts", type: "end", driveHoursFromPrevious: 4.5, plannedStayDays: 0, dogPlan: "Home", notes: "Trip complete." },
+]
+
+// Placeholder segment distances; replace with route-engine driving distances when available.
+export const baselineRoute1WithDistance: BaselineRouteDistance[] = [
+  { step: 1, distanceMilesToNext: 210 },
+  { step: 2, distanceMilesToNext: 105 },
+  { step: 3, distanceMilesToNext: 230 },
+  { step: 4, distanceMilesToNext: 220 },
+  { step: 5, distanceMilesToNext: 215 },
+  { step: 6, distanceMilesToNext: 140 },
+  { step: 7, distanceMilesToNext: 350 },
+  { step: 8, distanceMilesToNext: 260 },
+  { step: 9, distanceMilesToNext: 285 },
+  { step: 10, distanceMilesToNext: 65 },
+  { step: 11, distanceMilesToNext: 340 },
+  { step: 12, distanceMilesToNext: 150 },
+  { step: 13, distanceMilesToNext: 80 },
+  { step: 14, distanceMilesToNext: 85 },
+  { step: 15, distanceMilesToNext: 165 },
+  { step: 16, distanceMilesToNext: 225 },
+  { step: 17, distanceMilesToNext: 330 },
+  { step: 18, distanceMilesToNext: 165 },
+  { step: 19, distanceMilesToNext: 120 },
+  { step: 20, distanceMilesToNext: 260 },
+  { step: 21, distanceMilesToNext: 340 },
+  { step: 22, distanceMilesToNext: 300 },
+  { step: 23, distanceMilesToNext: 110 },
+  { step: 24, distanceMilesToNext: 60 },
+  { step: 25, distanceMilesToNext: 105 },
+  { step: 26, distanceMilesToNext: 390 },
+  { step: 27, distanceMilesToNext: 250 },
+  { step: 28, distanceMilesToNext: 240 },
+  { step: 29, distanceMilesToNext: 310 },
+  { step: 30, distanceMilesToNext: 140 },
+  { step: 31, distanceMilesToNext: 300 },
+  { step: 32, distanceMilesToNext: 280 },
+  { step: 33, distanceMilesToNext: 290 },
+  { step: 34, distanceMilesToNext: 310 },
+  { step: 35, distanceMilesToNext: 0 },
 ]
 
 export function formatPlannedStay(days: number): string {
@@ -193,6 +239,13 @@ assertContinuousRoute(baselineRoute1)
 if (baselineRoute1.length !== 35) {
   throw new Error(`Expected 35 baseline stops, received ${baselineRoute1.length}`)
 }
+if (baselineRoute1WithDistance.length !== baselineRoute1.length) {
+  throw new Error(`Expected ${baselineRoute1.length} segment entries, received ${baselineRoute1WithDistance.length}`)
+}
+
+const segmentDistanceByStep = new Map<number, number>(
+  baselineRoute1WithDistance.map((segment) => [segment.step, segment.distanceMilesToNext])
+)
 
 export const stopsData: StopData[] = [
   {
@@ -207,6 +260,8 @@ export const stopsData: StopData[] = [
     driveTimeFromPrev: "Start",
     stayDuration: "Home",
     plannedStayLabel: formatPlannedStay(0),
+    plannedStayDays: 0,
+    distanceMilesToNext: segmentDistanceByStep.get(1) ?? 0,
     highlights: ["launch point"],
     dogWalks: [{ name: "Good Harbor Beach", type: "beach" as const, leashRequired: true }],
     areaWarnings: { summary: "Check local seasonal dog rules", rating: 1 },
@@ -232,6 +287,11 @@ export const stopsData: StopData[] = [
     const point = coords[stop.step] ?? { lat: 39.5, lng: -98.35, x: 50, y: 25 }
     const plannedStayLabel = formatPlannedStay(stop.plannedStayDays)
 
+    const distanceMilesToNext = segmentDistanceByStep.get(stop.step) ?? 0
+    const totalMiles = baselineRoute1
+      .slice(0, index)
+      .reduce((sum, priorStop) => sum + (segmentDistanceByStep.get(priorStop.step) ?? 0), 0)
+
     return {
       id: String(stop.step),
       order: stop.step,
@@ -240,11 +300,13 @@ export const stopsData: StopData[] = [
       shortName: stop.name,
       state: stop.region,
       subtitle: `${stop.region} • ${plannedStayLabel}`,
-      distance: `${(index + 1) * 180} mi`,
-      totalMiles: (index + 1) * 180,
+      distance: `${totalMiles} mi`,
+      totalMiles,
       driveTimeFromPrev: `${stop.driveHoursFromPrevious}h`,
       stayDuration: plannedStayLabel,
       plannedStayLabel,
+      plannedStayDays: stop.plannedStayDays,
+      distanceMilesToNext,
       highlights: [stop.type],
       dogWalks: [{ name: `${stop.name} dog walk area`, type: "trail" as const, leashRequired: true }],
       areaWarnings: { summary: stop.notes, rating: (stop.type === "transit" ? 2 : 3) as 2 | 3 },
