@@ -47,6 +47,13 @@ type Screen = "map" | "what-now" | "emergency" | "stop-detail" | "select-locatio
 type Popup = "what-now" | "next-stop" | "emergency" | null
 const TRIP_EXECUTION_STORAGE_KEY = "roadtrip.execution.v1"
 
+const LEGACY_TRACKING_STORAGE_KEYS = [
+  "roadtrip.execution.v1",
+  "roadtrip.execution.v2",
+  "roadtrip.liveTripState",
+  "roadtrip.tripProgress",
+]
+
 export default function RoadTripPlanner() {
   const router = useRouter()
   const isMobile = useIsMobile()
@@ -186,6 +193,14 @@ export default function RoadTripPlanner() {
   // Determine destination for progress bar
   const isReturn = currentStop?.phase === "return"
   const destinationLabel = isReturn ? "Home / New England" : "Yellowstone / Tetons"
+
+  useEffect(() => {
+    // Safety migration: remove legacy trip-tracking state so planning mode always opens cleanly.
+    for (const key of LEGACY_TRACKING_STORAGE_KEYS) {
+      window.localStorage.removeItem(key)
+      window.sessionStorage.removeItem(key)
+    }
+  }, [])
 
   // Request location on initial load (optional - can be triggered by button)
   useEffect(() => {
