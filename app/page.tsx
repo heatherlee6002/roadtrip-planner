@@ -54,6 +54,28 @@ const LEGACY_TRACKING_STORAGE_KEYS = [
   "roadtrip.tripProgress",
 ]
 
+const LEGACY_TRACKING_STORAGE_KEYS = [
+  "roadtrip.execution.v1",
+  "roadtrip.execution.v2",
+  "roadtrip.liveTripState",
+  "roadtrip.tripProgress",
+]
+
+function isLegacyTrackingKey(key: string) {
+  if (LEGACY_TRACKING_STORAGE_KEYS.includes(key)) return true
+  if (!key.startsWith("roadtrip.")) return false
+
+  const normalized = key.toLowerCase()
+  return (
+    normalized.includes("trip") ||
+    normalized.includes("execution") ||
+    normalized.includes("progress") ||
+    normalized.includes("arrival") ||
+    normalized.includes("departure") ||
+    normalized.includes("manual")
+  )
+}
+
 export default function RoadTripPlanner() {
   const router = useRouter()
   const isMobile = useIsMobile()
@@ -199,6 +221,20 @@ export default function RoadTripPlanner() {
     for (const key of LEGACY_TRACKING_STORAGE_KEYS) {
       window.localStorage.removeItem(key)
       window.sessionStorage.removeItem(key)
+    }
+
+    for (let i = window.localStorage.length - 1; i >= 0; i -= 1) {
+      const key = window.localStorage.key(i)
+      if (key && isLegacyTrackingKey(key)) {
+        window.localStorage.removeItem(key)
+      }
+    }
+
+    for (let i = window.sessionStorage.length - 1; i >= 0; i -= 1) {
+      const key = window.sessionStorage.key(i)
+      if (key && isLegacyTrackingKey(key)) {
+        window.sessionStorage.removeItem(key)
+      }
     }
   }, [])
 
