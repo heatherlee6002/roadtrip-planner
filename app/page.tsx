@@ -3,7 +3,6 @@
 import { useState, useCallback, useEffect, useMemo } from "react"
 import { MapPin, Maximize2 } from "lucide-react"
 import { TripMap } from "@/components/trip-map"
-import { RouteProgress } from "@/components/route-progress"
 import { ActionButtons } from "@/components/action-buttons"
 import { PopupPreview } from "@/components/popup-preview"
 import { LocationPrompt } from "@/components/location-prompt"
@@ -11,7 +10,7 @@ import { Button } from "@/components/ui/button"
 import { WhatNowScreen } from "@/components/what-now-screen"
 import { EmergencyScreen } from "@/components/emergency-screen"
 import { StopDetailScreen } from "@/components/stop-detail-screen"
-import { stopsData, getStayOptions, getStopById, calculateProgress } from "@/lib/stops-data"
+import { stopsData, getStopById } from "@/lib/stops-data"
 import { createRouteDecisionContext, getNextStops, type RouteStrategy } from "@/lib/route-engine"
 import { useGeolocation } from "@/hooks/use-geolocation"
 import { ChatPanel } from "@/components/chat-panel"
@@ -100,6 +99,35 @@ function isLegacyTrackingKey(key: string) {
     normalized.includes("eta")
   )
 }
+
+const LEGACY_TRACKING_STORAGE_KEYS = [
+  "roadtrip.execution.v1",
+  "roadtrip.execution.v2",
+  "roadtrip.liveTripState",
+  "roadtrip.tripProgress",
+]
+
+function isLegacyTrackingKey(key: string) {
+  if (LEGACY_TRACKING_STORAGE_KEYS.includes(key)) return true
+
+  const normalized = key.toLowerCase()
+  return (
+    normalized.includes("roadtrip") ||
+    normalized.includes("trip") ||
+    normalized.includes("execution") ||
+    normalized.includes("progress") ||
+    normalized.includes("arrival") ||
+    normalized.includes("departure") ||
+    normalized.includes("manual") ||
+    normalized.includes("stay") ||
+    normalized.includes("delay") ||
+    normalized.includes("eta")
+  )
+}
+
+const BUILD_BRANCH = process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_REF ?? "work"
+const BUILD_SHA = (process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ?? "8a7ed05").slice(0, 7)
+const BUILD_MARKER = `BUILD MARKER: ${BUILD_BRANCH} ${BUILD_SHA}`
 
 const LEGACY_TRACKING_STORAGE_KEYS = [
   "roadtrip.execution.v1",
@@ -246,29 +274,35 @@ export default function RoadTripPlanner() {
   )
   const nextStopDecision = useMemo(() => getNextStops(routeContext, routeStrategy), [routeContext, routeStrategy])
   const nextStop = getStopById(nextStopId) ?? nextStopDecision.primaryStop
-  const offRouteStatus = useMemo(
-    () =>
-      detectOffRouteStatus({
-        currentLat: userLocation?.lat ?? null,
-        currentLng: userLocation?.lng ?? null,
-        currentStopLat: currentStop?.lat ?? 0,
-        currentStopLng: currentStop?.lng ?? 0,
-        nextStopLat: nextActiveStop?.lat ?? nextStop?.lat ?? 0,
-        nextStopLng: nextActiveStop?.lng ?? nextStop?.lng ?? 0,
-        minutesOffRoute: 0,
-      }),
-    [currentStop?.lat, currentStop?.lng, userLocation?.lat, userLocation?.lng, nextActiveStop?.lat, nextActiveStop?.lng, nextStop?.lat, nextStop?.lng]
-  )
-  const canShowOffRoutePrompt = Boolean(
-    offRouteStatus.prompt &&
-    !offRoutePromptDismissed &&
-    (offRoutePromptSnoozedUntil === null || tripNow.getTime() > offRoutePromptSnoozedUntil)
-  )
-  const progress = calculateProgress(currentStopId)
 
-  // Determine destination for progress bar
-  const isReturn = currentStop?.phase === "return"
-  const destinationLabel = isReturn ? "Home / New England" : "Yellowstone / Tetons"
+  useEffect(() => {
+    // Safety migration: remove legacy trip-tracking state so planning mode always opens cleanly.
+    for (const key of LEGACY_TRACKING_STORAGE_KEYS) {
+      window.localStorage.removeItem(key)
+      window.sessionStorage.removeItem(key)
+    }
+
+    for (let i = window.localStorage.length - 1; i >= 0; i -= 1) {
+      const key = window.localStorage.key(i)
+      if (key && isLegacyTrackingKey(key)) {
+        window.localStorage.removeItem(key)
+      }
+    }
+
+    for (let i = window.sessionStorage.length - 1; i >= 0; i -= 1) {
+      const key = window.sessionStorage.key(i)
+      if (key && isLegacyTrackingKey(key)) {
+        window.sessionStorage.removeItem(key)
+      }
+    }
+
+    for (const cookie of document.cookie.split(";")) {
+      const rawName = cookie.split("=")[0]?.trim()
+      if (rawName && isLegacyTrackingKey(rawName)) {
+        document.cookie = `${rawName}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
+      }
+    }
+  }, [])
 
   useEffect(() => {
     // Safety migration: remove legacy trip-tracking state so planning mode always opens cleanly.
@@ -893,8 +927,9 @@ export default function RoadTripPlanner() {
                   <Button size="sm" variant="outline" onClick={handleSkipNextStop}>Skip next stop</Button>
                 </div>
               </div>
-            )}
-          </div>
+            </>
+          )}
+        </section>
 
         {/* Map Section - fills remaining space */}
         <section className="flex-1 relative min-h-0 h-full">
