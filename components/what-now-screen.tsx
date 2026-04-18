@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, Dog, Tent, ArrowRight, Compass, AlertTriangle } from "lucide-react"
-import { getStopById, type StopData } from "@/lib/stops-data"
+import { getStayOptions, getStopById, type StopData } from "@/lib/stops-data"
 import { createRouteDecisionContext, getNextStops } from "@/lib/route-engine"
 
 interface WhatNowScreenProps {
@@ -23,10 +23,11 @@ export function WhatNowScreen({ currentStopId, onBack, onNavigateToStop, onShowE
   if (!currentStop) {
     return <main className="h-[100dvh] bg-background flex items-center justify-center"><p className="text-muted-foreground">Stop not found</p></main>
   }
+  const recommendedStay = getStayOptions(currentStop).find((option) => option.label === "A")
 
   const options = [
     { id: "dog", icon: Dog, label: "Dog Walk", description: currentStop.dogWalks[0]?.name || "Nearby dog walk", color: "bg-emerald-500/10 text-emerald-500", action: () => onShowStopDetail(currentStopId) },
-    { id: "stay", icon: Tent, label: "Stay", description: `4 options ready (A-D), recommended: ${currentStop.stayOptions.A.name}`, color: "bg-blue-500/10 text-blue-500", action: () => onShowStopDetail(currentStopId) },
+    { id: "stay", icon: Tent, label: "Stay", description: `4 options ready (A-D), recommended: ${recommendedStay?.name || "Option A"}`, color: "bg-blue-500/10 text-blue-500", action: () => onShowStopDetail(currentStopId) },
     { id: "move", icon: ArrowRight, label: "Move forward", description: nextStop ? `Continue to ${nextStop.shortName} (${nextStop.totalMiles - currentStop.totalMiles} mi)` : "View next stop", color: "bg-primary/10 text-primary", action: () => nextStopId && onNavigateToStop(nextStopId) },
     { id: "explore", icon: Compass, label: "Explore", description: getExploreDescription(currentStop), color: "bg-purple-500/10 text-purple-500", action: () => onShowStopDetail(currentStopId) },
     { id: "emergency", icon: AlertTriangle, label: "Emergency", description: `Warning ${currentStop.areaWarnings.rating}/5 - keep backup D ready`, color: "bg-destructive/10 text-destructive", action: onShowEmergency },

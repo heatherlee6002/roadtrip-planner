@@ -2,7 +2,7 @@
 
 import { X, HelpCircle, Navigation, AlertCircle, ChevronRight, Dog, ArrowRight, AlertTriangle, Tent, Trees, Car } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { getStopById } from "@/lib/stops-data"
+import { getStayOptions, getStopById } from "@/lib/stops-data"
 
 interface PopupPreviewProps {
   type: "what-now" | "next-stop" | "emergency"
@@ -15,6 +15,8 @@ interface PopupPreviewProps {
 export function PopupPreview({ type, currentStopId, nextStopId, onClose, onExpand }: PopupPreviewProps) {
   const currentStop = getStopById(currentStopId)
   const nextStop = getStopById(nextStopId)
+  const nextRecommended = nextStop ? getStayOptions(nextStop).find((option) => option.label === "A") : null
+  const emergencyStay = currentStop ? getStayOptions(currentStop).find((option) => option.label === "D") : null
 
   const config = {
     "what-now": {
@@ -35,7 +37,7 @@ export function PopupPreview({ type, currentStopId, nextStopId, onClose, onExpan
       subtitle: nextStop ? `${nextStop.distance} from start` : undefined,
       color: "bg-[oklch(0.55_0.18_150)]",
       items: nextStop ? [
-        { icon: Tent, label: nextStop.stayOptions.A.name },
+        { icon: Tent, label: nextRecommended?.name || "Recommended stay" },
         { icon: Trees, label: nextStop.type === "scenic-only" ? "Scenic stop" : "Stay decision stop" },
         { icon: Dog, label: nextStop.dogWalks[0]?.leashRequired ? "Leash required area" : "Off-leash possible" },
       ] : []
@@ -47,7 +49,7 @@ export function PopupPreview({ type, currentStopId, nextStopId, onClose, onExpan
       color: "bg-[oklch(0.60_0.18_40)]",
       items: currentStop ? [
         { icon: Car, label: currentStop.groceryNearby || "Nearby services" },
-        { icon: Tent, label: currentStop.stayOptions.D.name || "Emergency overnight" },
+        { icon: Tent, label: emergencyStay?.name || "Emergency overnight" },
         { icon: Trees, label: `Warning ${currentStop.areaWarnings.rating}/5` },
       ] : []
     }

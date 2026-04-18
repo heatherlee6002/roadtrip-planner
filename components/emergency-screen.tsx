@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, MapPin, Tent, Car, Phone, Navigation } from "lucide-react"
-import { getStopById } from "@/lib/stops-data"
+import { getStayOptions, getStopById } from "@/lib/stops-data"
 
 interface EmergencyScreenProps {
   currentStopId: string
@@ -11,10 +11,11 @@ interface EmergencyScreenProps {
 
 export function EmergencyScreen({ currentStopId, onBack }: EmergencyScreenProps) {
   const currentStop = getStopById(currentStopId)
+  const emergencyStay = currentStop ? getStayOptions(currentStop).find((option) => option.label === "D") : null
 
   const emergencyOptions = [
     { icon: Car, label: "Nearby Services", description: currentStop?.groceryNearby || "Truck stops, Walmart", urgent: false, searchQuery: "truck stop near me" },
-    { icon: Tent, label: "Emergency Overnight", description: currentStop?.stayOptions.D?.name || "Rest areas and overnight backups", urgent: false, searchQuery: "walmart near me" },
+    { icon: Tent, label: "Emergency Overnight", description: emergencyStay?.name || "Rest areas and overnight backups", urgent: false, searchQuery: "walmart near me" },
     { icon: MapPin, label: "Nearest Hospital", description: "Find emergency medical care", urgent: true, searchQuery: "hospital emergency room near me" },
     { icon: Phone, label: "Call 911", description: "Life-threatening emergency", urgent: true, action: "tel:911" },
   ]
@@ -46,7 +47,7 @@ export function EmergencyScreen({ currentStopId, onBack }: EmergencyScreenProps)
             <div className="mt-4 p-3 rounded-lg bg-muted/50 border border-border/50">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Nearby Planning Candidates</p>
               <div className="space-y-1">
-                {[currentStop.stayOptions.D.name, currentStop.groceryNearby, `Warning ${currentStop.areaWarnings.rating}/5`].map((item, i) => (
+                {[emergencyStay?.name || "Emergency overnight", currentStop.groceryNearby, `Warning ${currentStop.areaWarnings.rating}/5`].map((item, i) => (
                   <p key={i} className="text-xs text-foreground">{item}</p>
                 ))}
               </div>
