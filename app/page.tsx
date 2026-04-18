@@ -76,6 +76,31 @@ function isLegacyTrackingKey(key: string) {
   )
 }
 
+const LEGACY_TRACKING_STORAGE_KEYS = [
+  "roadtrip.execution.v1",
+  "roadtrip.execution.v2",
+  "roadtrip.liveTripState",
+  "roadtrip.tripProgress",
+]
+
+function isLegacyTrackingKey(key: string) {
+  if (LEGACY_TRACKING_STORAGE_KEYS.includes(key)) return true
+
+  const normalized = key.toLowerCase()
+  return (
+    normalized.includes("roadtrip") ||
+    normalized.includes("trip") ||
+    normalized.includes("execution") ||
+    normalized.includes("progress") ||
+    normalized.includes("arrival") ||
+    normalized.includes("departure") ||
+    normalized.includes("manual") ||
+    normalized.includes("stay") ||
+    normalized.includes("delay") ||
+    normalized.includes("eta")
+  )
+}
+
 export default function RoadTripPlanner() {
   const router = useRouter()
   const isMobile = useIsMobile()
@@ -234,6 +259,13 @@ export default function RoadTripPlanner() {
       const key = window.sessionStorage.key(i)
       if (key && isLegacyTrackingKey(key)) {
         window.sessionStorage.removeItem(key)
+      }
+    }
+
+    for (const cookie of document.cookie.split(";")) {
+      const rawName = cookie.split("=")[0]?.trim()
+      if (rawName && isLegacyTrackingKey(rawName)) {
+        document.cookie = `${rawName}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
       }
     }
   }, [])
