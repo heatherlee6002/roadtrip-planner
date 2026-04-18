@@ -20,6 +20,31 @@ import { Navigation, X, ChevronRight, MapPin as MapPinIcon, Clock, Dog } from "l
 type Screen = "map" | "what-now" | "emergency" | "stop-detail" | "select-location"
 type Popup = "what-now" | "next-stop" | "emergency" | null
 
+const LEGACY_TRACKING_STORAGE_KEYS = [
+  "roadtrip.execution.v1",
+  "roadtrip.execution.v2",
+  "roadtrip.liveTripState",
+  "roadtrip.tripProgress",
+]
+
+function isLegacyTrackingKey(key: string) {
+  if (LEGACY_TRACKING_STORAGE_KEYS.includes(key)) return true
+
+  const normalized = key.toLowerCase()
+  return (
+    normalized.includes("roadtrip") ||
+    normalized.includes("trip") ||
+    normalized.includes("execution") ||
+    normalized.includes("progress") ||
+    normalized.includes("arrival") ||
+    normalized.includes("departure") ||
+    normalized.includes("manual") ||
+    normalized.includes("stay") ||
+    normalized.includes("delay") ||
+    normalized.includes("eta")
+  )
+}
+
 export default function RoadTripPlanner() {
   // State management
   const [currentScreen, setCurrentScreen] = useState<Screen>("map")
@@ -62,6 +87,35 @@ export default function RoadTripPlanner() {
   // Determine destination for progress bar
   const isReturn = currentStop?.phase === "return"
   const destinationLabel = isReturn ? "Home / New England" : "Yellowstone / Tetons"
+
+  useEffect(() => {
+    // Safety migration: remove legacy trip-tracking state so planning mode always opens cleanly.
+    for (const key of LEGACY_TRACKING_STORAGE_KEYS) {
+      window.localStorage.removeItem(key)
+      window.sessionStorage.removeItem(key)
+    }
+
+    for (let i = window.localStorage.length - 1; i >= 0; i -= 1) {
+      const key = window.localStorage.key(i)
+      if (key && isLegacyTrackingKey(key)) {
+        window.localStorage.removeItem(key)
+      }
+    }
+
+    for (let i = window.sessionStorage.length - 1; i >= 0; i -= 1) {
+      const key = window.sessionStorage.key(i)
+      if (key && isLegacyTrackingKey(key)) {
+        window.sessionStorage.removeItem(key)
+      }
+    }
+
+    for (const cookie of document.cookie.split(";")) {
+      const rawName = cookie.split("=")[0]?.trim()
+      if (rawName && isLegacyTrackingKey(rawName)) {
+        document.cookie = `${rawName}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
+      }
+    }
+  }, [])
 
   // Request location on initial load (optional - can be triggered by button)
   useEffect(() => {
@@ -397,12 +451,12 @@ export default function RoadTripPlanner() {
                     </div>
                     <div className="flex items-center gap-3">
                       <Dog className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <span className="text-sm text-foreground truncate">{stop.dog.primary.split(',')[0]}</span>
+                      <span className="text-sm text-foreground truncate">{stop.dogWalks[0]?.name ?? "Dog walk option"}</span>
                     </div>
-                    {stop.stay[0] && (
+                    {stop.stayOptions[0] && (
                       <div className="flex items-center gap-3">
                         <MapPinIcon className="w-4 h-4 text-muted-foreground shrink-0" />
-                        <span className="text-sm text-foreground truncate">{stop.stay[0].name}</span>
+                        <span className="text-sm text-foreground truncate">{stop.stayOptions[0].name}</span>
                       </div>
                     )}
                   </div>
