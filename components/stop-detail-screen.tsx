@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, Dog, MapPin, Navigation, ShieldAlert, ShowerHead, ShoppingCart } from "lucide-react"
@@ -11,6 +11,7 @@ interface StopDetailScreenProps {
   stopId: string
   onBack: () => void
   onNavigateToStop?: (stopId: string) => void
+  showStopList?: boolean
 }
 
 const warningColors: Record<number, string> = {
@@ -211,9 +212,13 @@ function StopDetails({ stop, onNavigateToStop }: { stop: StopData; onNavigateToS
   )
 }
 
-export function StopDetailScreen({ stopId, onBack, onNavigateToStop }: StopDetailScreenProps) {
+export function StopDetailScreen({ stopId, onBack, onNavigateToStop, showStopList = true }: StopDetailScreenProps) {
   const [selectedStopId, setSelectedStopId] = useState(stopId)
   const selectedStop = getStopById(selectedStopId)
+
+  useEffect(() => {
+    setSelectedStopId(stopId)
+  }, [stopId])
 
   if (!selectedStop) {
     return (
@@ -225,7 +230,8 @@ export function StopDetailScreen({ stopId, onBack, onNavigateToStop }: StopDetai
 
   return (
     <main className="h-[100dvh] overflow-hidden bg-background">
-      <div className="mx-auto h-full w-full max-w-7xl grid grid-cols-1 md:grid-cols-1 lg:grid-cols-[35%_65%] gap-4">
+      <div className={`mx-auto h-full w-full ${showStopList ? "max-w-7xl grid grid-cols-1 md:grid-cols-1 lg:grid-cols-[35%_65%] gap-4" : "max-w-5xl"}`}>
+        {showStopList && (
         <aside className="border-b lg:border-b-0 lg:border-r lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto">
           <div className="sticky top-0 z-10 flex items-center gap-2 border-b bg-background px-3 py-2">
             <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="h-4 w-4" /></Button>
@@ -261,8 +267,15 @@ export function StopDetailScreen({ stopId, onBack, onNavigateToStop }: StopDetai
             ))}
           </div>
         </aside>
+        )}
 
-        <section className="overflow-y-auto p-4">
+        <section className={`overflow-y-auto p-4 ${showStopList ? "" : "h-full"}`}>
+          {!showStopList && (
+            <div className="sticky top-0 z-10 mb-4 flex items-center gap-2 border-b bg-background pb-2">
+              <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="h-4 w-4" /></Button>
+              <p className="text-sm font-semibold">Stop details</p>
+            </div>
+          )}
           <StopDetails stop={selectedStop} onNavigateToStop={onNavigateToStop} />
         </section>
       </div>

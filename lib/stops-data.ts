@@ -274,6 +274,20 @@ export function getStopById(id: string): StopData | undefined {
   return stopsData.find((stop) => stop.id === id)
 }
 
+export function resolveStopId(input: string): string | null {
+  const normalized = input.trim()
+  if (!normalized) return null
+  if (getStopById(normalized)) return normalized
+
+  const numeric = Number.parseInt(normalized, 10)
+  if (!Number.isNaN(numeric)) {
+    const asId = String(numeric)
+    if (getStopById(asId)) return asId
+  }
+
+  return null
+}
+
 export function getNextStopIndex(currentIndex: number): number {
   return Math.min(currentIndex + 1, stopsData.length - 1)
 }

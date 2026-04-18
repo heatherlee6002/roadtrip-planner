@@ -16,11 +16,16 @@ import { createRouteDecisionContext, getNextStops, type RouteStrategy } from "@/
 import { useGeolocation } from "@/hooks/use-geolocation"
 import { ChatPanel } from "@/components/chat-panel"
 import { Navigation, X, ChevronRight, MapPin as MapPinIcon, Clock, Dog } from "lucide-react"
+import { useIsMobile } from "@/hooks/use-mobile"
+import { useRouter } from "next/navigation"
 
 type Screen = "map" | "what-now" | "emergency" | "stop-detail" | "select-location"
 type Popup = "what-now" | "next-stop" | "emergency" | null
 
 export default function RoadTripPlanner() {
+  const router = useRouter()
+  const isMobile = useIsMobile()
+
   // State management
   const [currentScreen, setCurrentScreen] = useState<Screen>("map")
   const [activePopup, setActivePopup] = useState<Popup>(null)
@@ -447,7 +452,13 @@ export default function RoadTripPlanner() {
                       <span className="text-sm font-medium text-white">Navigate</span>
                     </button>
                     <button
-                      onClick={() => {
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        if (isMobile) {
+                          router.push(`/stops/${stopPopupId}`)
+                          setStopPopupId(null)
+                          return
+                        }
                         setSelectedStopId(stopPopupId)
                         setCurrentScreen("stop-detail")
                         setStopPopupId(null)
