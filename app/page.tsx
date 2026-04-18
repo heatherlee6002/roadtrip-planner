@@ -11,16 +11,22 @@ import { Button } from "@/components/ui/button"
 import { WhatNowScreen } from "@/components/what-now-screen"
 import { EmergencyScreen } from "@/components/emergency-screen"
 import { StopDetailScreen } from "@/components/stop-detail-screen"
-import { stopsData, getStopById, calculateProgress } from "@/lib/stops-data"
+import { stopsData, getStayOptions, getStopById, calculateProgress } from "@/lib/stops-data"
 import { createRouteDecisionContext, getNextStops, type RouteStrategy } from "@/lib/route-engine"
 import { useGeolocation } from "@/hooks/use-geolocation"
 import { ChatPanel } from "@/components/chat-panel"
 import { Navigation, X, ChevronRight, MapPin as MapPinIcon, Clock, Dog } from "lucide-react"
+import { useIsMobile } from "@/hooks/use-mobile"
+import { useRouter } from "next/navigation"
+import { buildTripProgressSummary, detectOffRouteStatus, liveTripStateMock } from "@/lib/trip-progress"
 
 type Screen = "map" | "what-now" | "emergency" | "stop-detail" | "select-location"
 type Popup = "what-now" | "next-stop" | "emergency" | null
 
 export default function RoadTripPlanner() {
+  const router = useRouter()
+  const isMobile = useIsMobile()
+
   // State management
   const [currentScreen, setCurrentScreen] = useState<Screen>("map")
   const [activePopup, setActivePopup] = useState<Popup>(null)
@@ -28,6 +34,8 @@ export default function RoadTripPlanner() {
   const [showLocationPrompt, setShowLocationPrompt] = useState(false)
   const [stopPopupId, setStopPopupId] = useState<string | null>(null) // For stop marker panel
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number; accuracy?: number } | null>(null)
+  const [offRoutePromptSnoozedUntil, setOffRoutePromptSnoozedUntil] = useState<number | null>(null)
+  const [offRoutePromptDismissed, setOffRoutePromptDismissed] = useState(false)
   
   // Trip state
   const [currentStopId, setCurrentStopId] = useState("0") // Start at Gloucester
@@ -47,6 +55,31 @@ export default function RoadTripPlanner() {
   } = useGeolocation()
 
   const currentStop = getStopById(currentStopId)
+  const currentStep = Number.parseInt(currentStopId, 10)
+  const routeStopsForProgress = useMemo(() => stopsData.filter((stop) => stop.id !== "0"), [])
+  const tripNow = userLocation ? new Date() : new Date(liveTripStateMock.now)
+  const liveTripState = useMemo(
+    () => ({
+      ...liveTripStateMock,
+      currentStep: Number.isNaN(currentStep) || currentStep < 1 ? liveTripStateMock.currentStep : currentStep,
+      now: tripNow.toISOString(),
+      currentLat: userLocation?.lat ?? null,
+      currentLng: userLocation?.lng ?? null,
+    }),
+    [currentStep, tripNow, userLocation]
+  )
+  const tripSummary = useMemo(
+    () =>
+      buildTripProgressSummary({
+        routeStops: routeStopsForProgress,
+        currentStep: liveTripState.currentStep,
+        tripStartDate: liveTripState.tripStartDate,
+        currentStopArrivalDate: liveTripState.currentStopArrivalDate,
+        plannedStayDays: currentStop?.plannedStayDays ?? 0,
+        now: liveTripState.now,
+      }),
+    [currentStop?.plannedStayDays, liveTripState, routeStopsForProgress]
+  )
   const routeContext = useMemo(
     () =>
       createRouteDecisionContext({
@@ -57,6 +90,24 @@ export default function RoadTripPlanner() {
   )
   const nextStopDecision = useMemo(() => getNextStops(routeContext, routeStrategy), [routeContext, routeStrategy])
   const nextStop = getStopById(nextStopId) ?? nextStopDecision.primaryStop
+  const offRouteStatus = useMemo(
+    () =>
+      detectOffRouteStatus({
+        currentLat: liveTripState.currentLat,
+        currentLng: liveTripState.currentLng,
+        currentStopLat: currentStop?.lat ?? 0,
+        currentStopLng: currentStop?.lng ?? 0,
+        nextStopLat: nextStop?.lat ?? 0,
+        nextStopLng: nextStop?.lng ?? 0,
+        minutesOffRoute: liveTripState.offRouteMinutes,
+      }),
+    [currentStop?.lat, currentStop?.lng, liveTripState.currentLat, liveTripState.currentLng, liveTripState.offRouteMinutes, nextStop?.lat, nextStop?.lng]
+  )
+  const canShowOffRoutePrompt = Boolean(
+    offRouteStatus.prompt &&
+    !offRoutePromptDismissed &&
+    (offRoutePromptSnoozedUntil === null || tripNow.getTime() > offRoutePromptSnoozedUntil)
+  )
   const progress = calculateProgress(currentStopId)
 
   // Determine destination for progress bar
@@ -283,66 +334,120 @@ export default function RoadTripPlanner() {
 
   return (
     <main className="h-[100dvh] bg-background flex flex-col overflow-hidden">
-      <div className="flex-1 flex flex-col max-w-md mx-auto w-full">
-        {/* Top Section - Current Location Header */}
-        <section className="flex items-center justify-between px-4 pt-[env(safe-area-inset-top,12px)] pb-2">
-          {tripCompleted ? (
-            <>
-              <div className="flex items-center gap-2">
-                <span className="text-xl">🎉</span>
-                <div>
-                  <span className="text-sm font-semibold text-foreground">Trip Complete!</span>
-                  <p className="text-xs text-muted-foreground">Back in Gloucester, MA</p>
+      <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-[35%_65%] h-screen">
+        <div className="hidden md:block lg:overflow-y-auto border-b lg:border-b-0 lg:border-r p-3 space-y-2">
+          {stopsData.map((stop) => (
+            <button
+              key={stop.id}
+              onClick={() => {
+                setSelectedStopId(stop.id)
+                handleStopClick(stop.id)
+              }}
+              className={`w-full rounded-lg border p-3 text-left transition-colors ${
+                stop.id === currentStopId ? "border-primary bg-primary/10" : "border-border bg-card hover:border-primary/50"
+              }`}
+            >
+              <p className="text-sm font-medium text-foreground">{stop.shortName}</p>
+              <p className="text-xs text-muted-foreground">{stop.state} • {stop.distance}</p>
+              <p className="text-xs text-muted-foreground">{stop.plannedStayLabel}</p>
+            </button>
+          ))}
+        </div>
+
+        <div className="min-h-0 flex flex-col h-full w-full">
+          {/* Top Section - Current Location Header */}
+          <section className="flex items-center justify-between px-4 pt-[env(safe-area-inset-top,12px)] pb-2">
+            {tripCompleted ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">🎉</span>
+                  <div>
+                    <span className="text-sm font-semibold text-foreground">Trip Complete!</span>
+                    <p className="text-xs text-muted-foreground">Back in Gloucester, MA</p>
+                  </div>
                 </div>
-              </div>
-              <Button variant="outline" size="sm" className="text-xs gap-1.5 h-8">
-                <Maximize2 className="w-3.5 h-3.5" />
-                Overview
-              </Button>
-            </>
-          ) : (
-            <>
-              <div className="flex items-center gap-2">
-                <MapPin className="w-5 h-5 text-primary" />
-                <div>
-                  <span className="text-sm text-muted-foreground">You are near </span>
-                  <span className="text-sm font-semibold text-foreground">{currentStop?.shortName || "Home"}</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" className="text-xs gap-1.5 h-8">
                   <Maximize2 className="w-3.5 h-3.5" />
                   Overview
                 </Button>
-                <Button
-                  variant="outline" 
-                  size="sm" 
-                  className="text-xs text-primary border-primary h-8"
-                  onClick={() => {
-                    requestLocation()
-                    setShowLocationPrompt(true)
-                  }}
-                >
-                  Locate Me
-                </Button>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-2">
+                  <MapPin className="w-5 h-5 text-primary" />
+                  <div>
+                    <span className="text-sm text-muted-foreground">You are near </span>
+                    <span className="text-sm font-semibold text-foreground">{currentStop?.shortName || "Home"}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" className="text-xs gap-1.5 h-8">
+                    <Maximize2 className="w-3.5 h-3.5" />
+                    Overview
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs text-primary border-primary h-8"
+                    onClick={() => {
+                      requestLocation()
+                      setShowLocationPrompt(true)
+                    }}
+                  >
+                    Locate Me
+                  </Button>
+                </div>
+              </>
+            )}
+          </section>
+
+          {/* Route Progress Bar */}
+          <div className="px-4 pb-2">
+            <RouteProgress
+              from={tripCompleted ? "Home" : (userLocation ? "Your location (GPS)" : (currentStop?.shortName || "Home"))}
+              to={tripCompleted ? "Trip Complete" : destinationLabel}
+              progress={tripCompleted ? 100 : progress}
+              phase={tripCompleted ? "return" : (currentStop?.phase || "outbound")}
+              tripCompleted={tripCompleted}
+            />
+          </div>
+          <div className="px-4 pb-2 space-y-2">
+            <div className="rounded-xl border border-border/50 bg-card p-3">
+              <p className="text-xs text-muted-foreground">{tripSummary.dayLabel}</p>
+              <p className="text-sm font-medium text-foreground">Trip progress: {tripSummary.dayProgressPercent}%</p>
+              <p className="text-xs text-muted-foreground">{tripSummary.distanceLabel}</p>
+              <p className="text-xs text-muted-foreground">{tripSummary.nextLegLabel}</p>
+              <p className="text-xs text-muted-foreground">Distance completion: {tripSummary.distanceProgressPercent}%</p>
+            </div>
+
+            {tripSummary.stayWarning && (
+              <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-800">
+                {tripSummary.stayWarning}
               </div>
-            </>
-          )}
-        </section>
-        
-        {/* Route Progress Bar */}
-        <div className="px-4 pb-2">
-          <RouteProgress 
-            from={tripCompleted ? "Home" : (userLocation ? "Your location (GPS)" : (currentStop?.shortName || "Home"))}
-            to={tripCompleted ? "Trip Complete" : destinationLabel}
-            progress={tripCompleted ? 100 : progress}
-            phase={tripCompleted ? "return" : (currentStop?.phase || "outbound")}
-            tripCompleted={tripCompleted}
-          />
-        </div>
+            )}
+
+            {canShowOffRoutePrompt && (
+              <div className="rounded-xl border border-primary/40 bg-primary/10 px-3 py-2">
+                <p className="text-xs text-foreground">You seem to be off route. Switch to Flex Mode?</p>
+                <div className="mt-2 flex items-center gap-2">
+                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setOffRoutePromptDismissed(true)}>
+                    Dismiss
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    onClick={() => setOffRoutePromptSnoozedUntil(Date.now() + 60 * 60 * 1000)}
+                  >
+                    Snooze 1h
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
 
         {/* Map Section - fills remaining space */}
-        <section className="flex-1 relative min-h-0">
+        <section className="flex-1 relative min-h-0 h-full">
           <TripMap 
             currentStopId={currentStopId}
             selectedStop={selectedStopId}
@@ -367,6 +472,7 @@ export default function RoadTripPlanner() {
           {stopPopupId && (() => {
             const stop = getStopById(stopPopupId)
             if (!stop) return null
+            const recommendedStay = getStayOptions(stop).find((option) => option.label === "A")
             return (
               <div className="absolute bottom-20 left-0 right-0 mx-4 animate-in slide-in-from-bottom-4 duration-200 z-[1000]">
                 <div className="bg-card border border-border rounded-2xl shadow-xl overflow-hidden">
@@ -396,13 +502,17 @@ export default function RoadTripPlanner() {
                       <span className="text-sm text-foreground">{stop.distance} from start</span>
                     </div>
                     <div className="flex items-center gap-3">
-                      <Dog className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <span className="text-sm text-foreground truncate">{stop.dog.primary.split(',')[0]}</span>
+                      <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span className="text-sm text-foreground">{stop.plannedStayLabel}</span>
                     </div>
-                    {stop.stay[0] && (
+                    <div className="flex items-center gap-3">
+                      <Dog className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span className="text-sm text-foreground truncate">{stop.dogWalks[0]?.name ?? 'Dog walk option'}</span>
+                    </div>
+                    {recommendedStay && (
                       <div className="flex items-center gap-3">
                         <MapPinIcon className="w-4 h-4 text-muted-foreground shrink-0" />
-                        <span className="text-sm text-foreground truncate">{stop.stay[0].name}</span>
+                        <span className="text-sm text-foreground truncate">{recommendedStay.name}</span>
                       </div>
                     )}
                   </div>
@@ -422,7 +532,13 @@ export default function RoadTripPlanner() {
                       <span className="text-sm font-medium text-white">Navigate</span>
                     </button>
                     <button
-                      onClick={() => {
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        if (isMobile) {
+                          router.push(`/stops/${stopPopupId}`)
+                          setStopPopupId(null)
+                          return
+                        }
                         setSelectedStopId(stopPopupId)
                         setCurrentScreen("stop-detail")
                         setStopPopupId(null)
@@ -465,6 +581,7 @@ export default function RoadTripPlanner() {
             onStartNewTrip={handleStartNewTrip}
           />
         </section>
+        </div>
       </div>
 
       {/* Chat Panel */}
