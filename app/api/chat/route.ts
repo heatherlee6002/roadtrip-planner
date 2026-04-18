@@ -4,48 +4,38 @@ import {
   streamText,
   UIMessage,
 } from 'ai'
-import { stopsData, getStopById, StopData } from '@/lib/stops-data'
+import { getStayOptions, stopsData, getStopById, StopData } from '@/lib/stops-data'
 
 export const maxDuration = 30
 
 function formatStopContext(stop: StopData | undefined): string {
   if (!stop) return 'Unknown location'
-  
+
   let context = `${stop.name} (${stop.subtitle})\n`
   context += `Distance from start: ${stop.distance}\n`
   context += `Phase: ${stop.phase}\n`
-  context += `Type: ${stop.type}\n\n`
-  
-  if (stop.stay.length > 0) {
-    context += `Stay candidate options (static planning data):\n`
-    stop.stay.forEach(s => {
-      context += `  ${s.letter}. ${s.name}\n`
-    })
-    context += '\n'
-  }
-  
-  context += `Dog info: ${stop.dog.primary}`
-  if (stop.dog.secondary) context += ` | ${stop.dog.secondary}`
-  if (stop.dog.restrictions) context += ` | RESTRICTIONS: ${stop.dog.restrictions}`
-  context += '\n\n'
-  
-  context += `Emergency candidate options (static planning data):\n`
-  stop.emergency.forEach(e => {
-    context += `  - ${e.label}\n`
+  context += `Warning rating: ${stop.areaWarnings.rating}/5 - ${stop.areaWarnings.summary}\n\n`
+
+  context += `Stay options:\n`
+  getStayOptions(stop).forEach((s) => {
+    context += `  ${s.label}. ${s.name} (${s.type}) | Dog: ${s.dogFriendly ? 'Yes' : 'No'} | Shower: ${s.shower} | Grocery: ${s.groceryNearby}\n`
   })
   context += '\n'
-  
-  context += `Logistics: Groceries: ${stop.logistics.groceries} | Gas: ${stop.logistics.gas}\n`
-  
-  if (stop.notes) {
-    context += `Notes: ${stop.notes}\n`
-  }
-  
+
+  context += `Nearby dog walks:\n`
+  stop.dogWalks.forEach((walk) => {
+    context += `  - ${walk.name} (${walk.type}) | Leash required: ${walk.leashRequired ? 'Yes' : 'No'}\n`
+  })
+  context += '\n'
+
+  context += `General grocery proximity: ${stop.groceryNearby}\n`
+  context += `Shower info: ${stop.showerInfo}\n`
+
   return context
 }
 
 export async function POST(req: Request) {
-  const { messages, currentStopId, nextStopId }: { 
+  const { messages, currentStopId, nextStopId }: {
     messages: UIMessage[]
     currentStopId: string
     nextStopId: string
@@ -53,10 +43,9 @@ export async function POST(req: Request) {
 
   const currentStop = getStopById(currentStopId)
   const nextStop = getStopById(nextStopId)
-  
-  // Build context about the trip
+
   const tripContext = `
-You are a helpful road trip assistant for a road trip with a dog. You help the user make decisions about where to stay, dog-friendly activities, safety, and navigation.
+You are a helpful road trip assistant for a road trip with a dog. Focus on practical decision support.
 
 CURRENT LOCATION:
 ${formatStopContext(currentStop)}
@@ -64,29 +53,15 @@ ${formatStopContext(currentStop)}
 NEXT PLANNED STOP:
 ${formatStopContext(nextStop)}
 
-FULL ROUTE OVERVIEW:
-The trip has ${stopsData.length} stops total, using a static fallback architecture:
-- Route name: Cross-Country Scenic Loop.
-- Outbound leg: nationwide scenic anchors (New England -> Mid-Atlantic -> Smokies/Appalachians -> southern/central connectors -> Rockies -> Yellowstone/Tetons).
-- Return leg: northern interior + Great Lakes/Midwest + PA/NY interior back to home.
-- Start mode: precise device GPS in the client UI.
-- End mode: home.
-
 KEY GUIDELINES:
-- Prioritize dog safety and comfort in all recommendations
-- Stay/dog/emergency entries are static planning candidates, not live validated inventory
-- For "stay-friendly" stops, recommend campgrounds or dispersed camping first
-- For "scenic-only" stops, emphasize quick dog breaks and photo ops
-- For "transit" stops, focus on efficiency and rest areas
-- Emergency recommendations should prioritize 24/7 options
-- Be aware of national park dog restrictions (dogs often limited to parking lots, campgrounds, and paved roads)
-- Weather and season may affect recommendations
-
-Available stop types: stay-friendly, scenic-only, transit
-Route phases: outbound, turning-point, return
+- Prioritize dog safety and comfort
+- Explicitly compare stay options A/B/C/D when user asks where to stay
+- Treat stay option A as the recommended baseline
+- Highlight warning ratings and leash requirements
+- Remind users that this is static planning data
 
 ALL STOPS DATA:
-${stopsData.map(s => `${s.id}. ${s.shortName} (${s.type}) - ${s.distance}`).join('\n')}
+${stopsData.map(s => `${s.id}. ${s.shortName} - warning ${s.areaWarnings.rating}/5 - ${s.distance}`).join('\n')}
 `
 
   const result = streamText({
