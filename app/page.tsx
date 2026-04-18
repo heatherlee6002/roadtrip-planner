@@ -18,10 +18,34 @@ import { ChatPanel } from "@/components/chat-panel"
 import { Navigation, X, ChevronRight, MapPin as MapPinIcon, Clock, Dog } from "lucide-react"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useRouter } from "next/navigation"
-import { buildTripProgressSummary, detectOffRouteStatus, liveTripStateMock } from "@/lib/trip-progress"
+import {
+  DEFAULT_TRIP_EXECUTION_STATE,
+  applyDelayAdjustment,
+  applyStayAdjustment,
+  calculateActualStayDuration,
+  calculateEffectiveDriveHours,
+  calculateEffectiveStayDays,
+  calculateExpectedTripDayAtStep,
+  calculateRouteProgress,
+  calculateScheduleVariance,
+  calculateTimeProgress,
+  detectOffRouteStatus,
+  formatEta,
+  getNextActiveStop,
+  getScheduleStatus,
+  markArrived,
+  markDeparted,
+  normalizeStopData,
+  skipStop,
+  startLeg,
+  startTrip,
+  type TripExecutionState,
+} from "@/lib/trip-execution"
+import type { StayOptionLabel } from "@/lib/stops-data"
 
 type Screen = "map" | "what-now" | "emergency" | "stop-detail" | "select-location"
 type Popup = "what-now" | "next-stop" | "emergency" | null
+const TRIP_EXECUTION_STORAGE_KEY = "roadtrip.execution.v1"
 
 export default function RoadTripPlanner() {
   const router = useRouter()
@@ -36,6 +60,17 @@ export default function RoadTripPlanner() {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number; accuracy?: number } | null>(null)
   const [offRoutePromptSnoozedUntil, setOffRoutePromptSnoozedUntil] = useState<number | null>(null)
   const [offRoutePromptDismissed, setOffRoutePromptDismissed] = useState(false)
+  const [tripExecution, setTripExecution] = useState<TripExecutionState>(DEFAULT_TRIP_EXECUTION_STATE)
+  const [kickoffStartAt, setKickoffStartAt] = useState(() => new Date().toISOString().slice(0, 16))
+  const [kickoffStayOption, setKickoffStayOption] = useState<StayOptionLabel | "custom">("A")
+  const [kickoffCustomDestination, setKickoffCustomDestination] = useState("")
+  const [kickoffManualDelayHours, setKickoffManualDelayHours] = useState(0)
+  const [arrivalCustomAt, setArrivalCustomAt] = useState("")
+  const [departureCustomAt, setDepartureCustomAt] = useState("")
+  const [nextLegOption, setNextLegOption] = useState<StayOptionLabel | "custom">("A")
+  const [nextLegCustomDestination, setNextLegCustomDestination] = useState("")
+  const [nextLegDelayHours, setNextLegDelayHours] = useState(0)
+  const [stayAdjustDays, setStayAdjustDays] = useState(1)
   
   // Trip state
   const [currentStopId, setCurrentStopId] = useState("0") // Start at Gloucester
@@ -54,32 +89,70 @@ export default function RoadTripPlanner() {
     requestLocation 
   } = useGeolocation()
 
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(TRIP_EXECUTION_STORAGE_KEY)
+      if (!raw) return
+      const parsed = JSON.parse(raw) as TripExecutionState
+      setTripExecution({ ...DEFAULT_TRIP_EXECUTION_STATE, ...parsed })
+    } catch (error) {
+      console.warn("[roadtrip] failed to hydrate trip execution state", error)
+    }
+  }, [])
+
+  useEffect(() => {
+    window.localStorage.setItem(TRIP_EXECUTION_STORAGE_KEY, JSON.stringify(tripExecution))
+  }, [tripExecution])
+
+  useEffect(() => {
+    if (tripExecution.tripStarted && tripExecution.currentStep > 0) {
+      setCurrentStopId(String(tripExecution.currentStep))
+    }
+  }, [tripExecution.currentStep, tripExecution.tripStarted])
+
   const currentStop = getStopById(currentStopId)
   const currentStep = Number.parseInt(currentStopId, 10)
-  const routeStopsForProgress = useMemo(() => stopsData.filter((stop) => stop.id !== "0"), [])
-  const tripNow = userLocation ? new Date() : new Date(liveTripStateMock.now)
-  const liveTripState = useMemo(
-    () => ({
-      ...liveTripStateMock,
-      currentStep: Number.isNaN(currentStep) || currentStep < 1 ? liveTripStateMock.currentStep : currentStep,
-      now: tripNow.toISOString(),
-      currentLat: userLocation?.lat ?? null,
-      currentLng: userLocation?.lng ?? null,
-    }),
-    [currentStep, tripNow, userLocation]
+  const tripNow = new Date()
+  const normalizedStops = useMemo(
+    () => normalizeStopData(stopsData.filter((stop) => stop.id !== "0"), tripExecution),
+    [tripExecution]
   )
-  const tripSummary = useMemo(
-    () =>
-      buildTripProgressSummary({
-        routeStops: routeStopsForProgress,
-        currentStep: liveTripState.currentStep,
-        tripStartDate: liveTripState.tripStartDate,
-        currentStopArrivalDate: liveTripState.currentStopArrivalDate,
-        plannedStayDays: currentStop?.plannedStayDays ?? 0,
-        now: liveTripState.now,
-      }),
-    [currentStop?.plannedStayDays, liveTripState, routeStopsForProgress]
+  const normalizedCurrentStop = normalizedStops.find((stop) => (stop.stepNumber ?? stop.order) === currentStep) ?? null
+  const nextActiveStop = useMemo(
+    () => getNextActiveStop(normalizedStops, currentStep),
+    [normalizedStops, currentStep]
   )
+  const timeProgress = useMemo(
+    () => calculateTimeProgress(tripExecution.tripStartAt, normalizedStops, tripNow),
+    [tripExecution.tripStartAt, normalizedStops, tripNow]
+  )
+  const routeProgressData = useMemo(
+    () => calculateRouteProgress(normalizedStops, currentStep),
+    [normalizedStops, currentStep]
+  )
+  const expectedTripDayAtCurrentStop = useMemo(
+    () => calculateExpectedTripDayAtStep(normalizedStops, currentStep),
+    [normalizedStops, currentStep]
+  )
+  const scheduleVarianceDays = useMemo(
+    () => calculateScheduleVariance(timeProgress.tripDay, expectedTripDayAtCurrentStop),
+    [timeProgress.tripDay, expectedTripDayAtCurrentStop]
+  )
+  const scheduleStatus = getScheduleStatus(scheduleVarianceDays)
+  const currentStopHistory = currentStep > 0 ? tripExecution.historyByStep[currentStep] : undefined
+  const currentStopActualStayDays = calculateActualStayDuration(
+    currentStopHistory?.actualArrivalAt ?? null,
+    currentStopHistory?.actualDepartureAt ?? null,
+    tripNow
+  )
+  const adjustedPlannedStayDays = calculateEffectiveStayDays(
+    normalizedCurrentStop?.plannedStayDays ?? 0,
+    normalizedCurrentStop?.manualStayAdjustmentDays ?? 0
+  )
+  const stayingTooLong = currentStopActualStayDays > adjustedPlannedStayDays && adjustedPlannedStayDays > 0
+  const driveHoursBase = normalizedCurrentStop?.plannedDriveHoursToNext ?? 0
+  const driveHoursDelay = normalizedCurrentStop?.manualDelayHours ?? 0
+  const driveHoursEffective = calculateEffectiveDriveHours(driveHoursBase, driveHoursDelay)
   const routeContext = useMemo(
     () =>
       createRouteDecisionContext({
@@ -93,15 +166,15 @@ export default function RoadTripPlanner() {
   const offRouteStatus = useMemo(
     () =>
       detectOffRouteStatus({
-        currentLat: liveTripState.currentLat,
-        currentLng: liveTripState.currentLng,
+        currentLat: userLocation?.lat ?? null,
+        currentLng: userLocation?.lng ?? null,
         currentStopLat: currentStop?.lat ?? 0,
         currentStopLng: currentStop?.lng ?? 0,
-        nextStopLat: nextStop?.lat ?? 0,
-        nextStopLng: nextStop?.lng ?? 0,
-        minutesOffRoute: liveTripState.offRouteMinutes,
+        nextStopLat: nextActiveStop?.lat ?? nextStop?.lat ?? 0,
+        nextStopLng: nextActiveStop?.lng ?? nextStop?.lng ?? 0,
+        minutesOffRoute: 0,
       }),
-    [currentStop?.lat, currentStop?.lng, liveTripState.currentLat, liveTripState.currentLng, liveTripState.offRouteMinutes, nextStop?.lat, nextStop?.lng]
+    [currentStop?.lat, currentStop?.lng, userLocation?.lat, userLocation?.lng, nextActiveStop?.lat, nextActiveStop?.lng, nextStop?.lat, nextStop?.lng]
   )
   const canShowOffRoutePrompt = Boolean(
     offRouteStatus.prompt &&
@@ -244,6 +317,97 @@ export default function RoadTripPlanner() {
     setSelectedStopId("0")
     setCurrentScreen("stop-detail")
   }, [])
+
+  const handleKickoffTrip = useCallback(() => {
+    const fromStep = Number.isNaN(currentStep) || currentStep < 1 ? 1 : currentStep
+    const chosenDestinationName = kickoffStayOption === "custom" ? kickoffCustomDestination.trim() || null : null
+    setTripExecution((prev) =>
+      startTrip({
+        state: prev,
+        stops: stopsData.filter((stop) => stop.id !== "0"),
+        startAt: new Date(kickoffStartAt || new Date().toISOString()).toISOString(),
+        fromStep,
+        chosenStayOptionId: kickoffStayOption === "custom" ? null : kickoffStayOption,
+        chosenDestinationName,
+        manualDelayHours: kickoffManualDelayHours,
+      })
+    )
+  }, [currentStep, kickoffCustomDestination, kickoffManualDelayHours, kickoffStartAt, kickoffStayOption])
+
+  const handleMarkArrived = useCallback((arrivalAtIso?: string) => {
+    const arrivalAt = arrivalAtIso ?? new Date().toISOString()
+    setTripExecution((prev) =>
+      markArrived({
+        state: prev,
+        arrivalAt,
+        destinationStep: prev.currentLeg?.toStep ?? null,
+      })
+    )
+    const destination = tripExecution.currentLeg?.toStep
+    if (destination) {
+      const destinationId = String(destination)
+      setCurrentStopId(destinationId)
+      setSelectedStopId(destinationId)
+    }
+  }, [tripExecution.currentLeg?.toStep])
+
+  const handleMarkDeparted = useCallback((departureAtIso?: string) => {
+    const departureAt = departureAtIso ?? new Date().toISOString()
+    const step = Number.isNaN(currentStep) || currentStep < 1 ? 1 : currentStep
+    setTripExecution((prev) =>
+      markDeparted({
+        state: prev,
+        departureAt,
+        step,
+      })
+    )
+  }, [currentStep])
+
+  const handleStartNextLeg = useCallback(() => {
+    const step = Number.isNaN(currentStep) || currentStep < 1 ? 1 : currentStep
+    const chosenDestinationName = nextLegOption === "custom" ? nextLegCustomDestination.trim() || null : null
+    const departureAt = departureCustomAt
+      ? new Date(departureCustomAt).toISOString()
+      : new Date().toISOString()
+    setTripExecution((prev) => {
+      const withDelay = applyDelayAdjustment(prev, step, nextLegDelayHours)
+      return startLeg({
+        state: withDelay,
+        stops: stopsData.filter((stop) => stop.id !== "0"),
+        startAt: departureAt,
+        fromStep: step,
+        chosenStayOptionId: nextLegOption === "custom" ? null : nextLegOption,
+        chosenDestinationName,
+        manualDelayHours: nextLegDelayHours,
+      })
+    })
+  }, [currentStep, departureCustomAt, nextLegCustomDestination, nextLegDelayHours, nextLegOption])
+
+  const handleSkipCurrentStop = useCallback(() => {
+    if (Number.isNaN(currentStep) || currentStep < 1) return
+    setTripExecution((prev) => skipStop(prev, currentStep))
+  }, [currentStep])
+
+  const handleSkipNextStop = useCallback(() => {
+    if (!nextActiveStop) return
+    const nextStep = nextActiveStop.stepNumber ?? nextActiveStop.order
+    setTripExecution((prev) => skipStop(prev, nextStep))
+  }, [nextActiveStop])
+
+  const handleAddStayDay = useCallback(() => {
+    if (Number.isNaN(currentStep) || currentStep < 1) return
+    setTripExecution((prev) => applyStayAdjustment(prev, currentStep, 1, "Added one day"))
+  }, [currentStep])
+
+  const handleAddCustomStayDays = useCallback(() => {
+    if (Number.isNaN(currentStep) || currentStep < 1) return
+    setTripExecution((prev) => applyStayAdjustment(prev, currentStep, stayAdjustDays, "Custom adjustment"))
+  }, [currentStep, stayAdjustDays])
+
+  const handleLeaveEarly = useCallback(() => {
+    if (!currentStopHistory?.actualArrivalAt) return
+    handleMarkDeparted(new Date().toISOString())
+  }, [currentStopHistory?.actualArrivalAt, handleMarkDeparted])
 
   // Screen routing
   if (currentScreen === "what-now") {
@@ -413,16 +577,91 @@ export default function RoadTripPlanner() {
           </div>
           <div className="px-4 pb-2 space-y-2">
             <div className="rounded-xl border border-border/50 bg-card p-3">
-              <p className="text-xs text-muted-foreground">{tripSummary.dayLabel}</p>
-              <p className="text-sm font-medium text-foreground">Trip progress: {tripSummary.dayProgressPercent}%</p>
-              <p className="text-xs text-muted-foreground">{tripSummary.distanceLabel}</p>
-              <p className="text-xs text-muted-foreground">{tripSummary.nextLegLabel}</p>
-              <p className="text-xs text-muted-foreground">Distance completion: {tripSummary.distanceProgressPercent}%</p>
+              <p className="text-xs text-muted-foreground">
+                Day {timeProgress.tripDay || 1} of {timeProgress.totalPlannedDays} days
+              </p>
+              <p className="text-sm font-medium text-foreground">Trip progress: {timeProgress.percent}%</p>
+              <p className="text-xs text-muted-foreground">
+                Distance: {routeProgressData.completedDistance} / {routeProgressData.totalRouteDistance} miles
+              </p>
+              <p className="text-xs text-muted-foreground">Next leg: {routeProgressData.currentToNextDistance} miles</p>
+              <p className="text-xs text-muted-foreground">Remaining miles: {routeProgressData.remainingDistance}</p>
+              <p className="text-xs text-muted-foreground">
+                Schedule: {scheduleStatus} ({scheduleVarianceDays > 0 ? "+" : ""}
+                {scheduleVarianceDays.toFixed(1)} days)
+              </p>
             </div>
 
-            {tripSummary.stayWarning && (
+            {!tripExecution.tripStarted && (
+              <div className="rounded-xl border border-border/50 bg-card p-3 space-y-2">
+                <p className="text-sm font-medium text-foreground">Kick off roadtrip</p>
+                <label className="text-xs text-muted-foreground block">
+                  Started at
+                  <input
+                    type="datetime-local"
+                    value={kickoffStartAt}
+                    onChange={(event) => setKickoffStartAt(event.target.value)}
+                    className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+                  />
+                </label>
+                <label className="text-xs text-muted-foreground block">
+                  Chosen stay
+                  <select
+                    value={kickoffStayOption}
+                    onChange={(event) => setKickoffStayOption(event.target.value as StayOptionLabel | "custom")}
+                    className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+                  >
+                    <option value="A">Option A</option>
+                    <option value="B">Option B</option>
+                    <option value="C">Option C</option>
+                    <option value="D">Option D</option>
+                    <option value="custom">Another destination</option>
+                  </select>
+                </label>
+                {kickoffStayOption === "custom" && (
+                  <label className="text-xs text-muted-foreground block">
+                    Destination name
+                    <input
+                      value={kickoffCustomDestination}
+                      onChange={(event) => setKickoffCustomDestination(event.target.value)}
+                      className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    />
+                  </label>
+                )}
+                <label className="text-xs text-muted-foreground block">
+                  Manual delay hours
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.5}
+                    value={kickoffManualDelayHours}
+                    onChange={(event) => setKickoffManualDelayHours(Number(event.target.value) || 0)}
+                    className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+                  />
+                </label>
+                <Button size="sm" className="w-full" onClick={handleKickoffTrip}>Start Roadtrip</Button>
+              </div>
+            )}
+
+            {tripExecution.tripStarted && tripExecution.currentLeg && (
+              <div className="rounded-xl border border-border/50 bg-card p-3 space-y-2">
+                <p className="text-sm font-medium text-foreground">
+                  Roadtrip started {formatEta(tripExecution.tripStartAt ?? tripExecution.currentLeg.departureAt, tripNow)}
+                </p>
+                <p className="text-xs text-muted-foreground">Heading to {tripExecution.currentLeg.chosenDestinationName ?? "Next stop"}</p>
+                <p className="text-xs text-muted-foreground">
+                  Chosen stay: {tripExecution.currentLeg.chosenStayOptionId ? `Option ${tripExecution.currentLeg.chosenStayOptionId}` : "Custom destination"}
+                </p>
+                <p className="text-xs text-muted-foreground">ETA: {formatEta(tripExecution.currentLeg.estimatedArrivalAt, tripNow)}</p>
+                <p className="text-xs text-muted-foreground">
+                  Drive: {driveHoursBase.toFixed(1)}h + {driveHoursDelay.toFixed(1)}h delay = {driveHoursEffective.toFixed(1)}h
+                </p>
+              </div>
+            )}
+
+            {stayingTooLong && (
               <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-800">
-                {tripSummary.stayWarning}
+                You are staying longer than planned. This may delay your schedule.
               </div>
             )}
 
@@ -441,6 +680,105 @@ export default function RoadTripPlanner() {
                   >
                     Snooze 1h
                   </Button>
+                </div>
+              </div>
+            )}
+
+            {tripExecution.tripStarted && (
+              <div className="rounded-xl border border-border/50 bg-card p-3 space-y-2">
+                <p className="text-sm font-medium text-foreground">Current stop actions</p>
+                <p className="text-xs text-muted-foreground">
+                  Planned stay: {normalizedCurrentStop?.plannedStayDays ?? 0}d • Adjusted: {adjustedPlannedStayDays}d • Actual: {currentStopActualStayDays.toFixed(1)}d
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button size="sm" variant="outline" onClick={() => handleMarkArrived()}>Mark arrived now</Button>
+                  <Button size="sm" variant="outline" onClick={() => handleMarkDeparted()}>Mark departed now</Button>
+                  <Button size="sm" variant="outline" onClick={handleAddStayDay}>Add 1 day here</Button>
+                  <Button size="sm" variant="outline" onClick={handleLeaveEarly}>Leave early</Button>
+                </div>
+                <label className="text-xs text-muted-foreground block">
+                  Arrive with custom time
+                  <input
+                    type="datetime-local"
+                    value={arrivalCustomAt}
+                    onChange={(event) => setArrivalCustomAt(event.target.value)}
+                    className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+                  />
+                </label>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => arrivalCustomAt && handleMarkArrived(new Date(arrivalCustomAt).toISOString())}
+                >
+                  Confirm custom arrival
+                </Button>
+                <label className="text-xs text-muted-foreground block">
+                  Add custom stay days
+                  <input
+                    type="number"
+                    step={0.5}
+                    value={stayAdjustDays}
+                    onChange={(event) => setStayAdjustDays(Number(event.target.value) || 0)}
+                    className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+                  />
+                </label>
+                <Button size="sm" variant="outline" className="w-full" onClick={handleAddCustomStayDays}>
+                  Apply stay adjustment
+                </Button>
+
+                <div className="rounded-md border border-border p-2 space-y-2">
+                  <p className="text-xs font-medium text-foreground">Start next leg</p>
+                  <label className="text-xs text-muted-foreground block">
+                    Next stay choice
+                    <select
+                      value={nextLegOption}
+                      onChange={(event) => setNextLegOption(event.target.value as StayOptionLabel | "custom")}
+                      className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    >
+                      <option value="A">Option A</option>
+                      <option value="B">Option B</option>
+                      <option value="C">Option C</option>
+                      <option value="D">Option D</option>
+                      <option value="custom">Another destination</option>
+                    </select>
+                  </label>
+                  {nextLegOption === "custom" && (
+                    <input
+                      value={nextLegCustomDestination}
+                      onChange={(event) => setNextLegCustomDestination(event.target.value)}
+                      placeholder="Destination name"
+                      className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    />
+                  )}
+                  <label className="text-xs text-muted-foreground block">
+                    Manual delay hours
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.5}
+                      value={nextLegDelayHours}
+                      onChange={(event) => setNextLegDelayHours(Number(event.target.value) || 0)}
+                      className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    />
+                  </label>
+                  <label className="text-xs text-muted-foreground block">
+                    Depart with custom time
+                    <input
+                      type="datetime-local"
+                      value={departureCustomAt}
+                      onChange={(event) => setDepartureCustomAt(event.target.value)}
+                      className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    />
+                  </label>
+                  <Button size="sm" className="w-full" onClick={handleStartNextLeg}>
+                    Start next leg
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <Button size="sm" variant="outline" onClick={handleSkipCurrentStop}>Skip this stop</Button>
+                  <Button size="sm" variant="outline" onClick={handleSkipNextStop}>Skip next stop</Button>
                 </div>
               </div>
             )}
