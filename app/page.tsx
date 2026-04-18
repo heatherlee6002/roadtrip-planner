@@ -101,6 +101,35 @@ function isLegacyTrackingKey(key: string) {
   )
 }
 
+const LEGACY_TRACKING_STORAGE_KEYS = [
+  "roadtrip.execution.v1",
+  "roadtrip.execution.v2",
+  "roadtrip.liveTripState",
+  "roadtrip.tripProgress",
+]
+
+function isLegacyTrackingKey(key: string) {
+  if (LEGACY_TRACKING_STORAGE_KEYS.includes(key)) return true
+
+  const normalized = key.toLowerCase()
+  return (
+    normalized.includes("roadtrip") ||
+    normalized.includes("trip") ||
+    normalized.includes("execution") ||
+    normalized.includes("progress") ||
+    normalized.includes("arrival") ||
+    normalized.includes("departure") ||
+    normalized.includes("manual") ||
+    normalized.includes("stay") ||
+    normalized.includes("delay") ||
+    normalized.includes("eta")
+  )
+}
+
+const BUILD_BRANCH = process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_REF ?? "work"
+const BUILD_SHA = (process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ?? "8a7ed05").slice(0, 7)
+const BUILD_MARKER = `BUILD MARKER: ${BUILD_BRANCH} ${BUILD_SHA}`
+
 export default function RoadTripPlanner() {
   const router = useRouter()
   const isMobile = useIsMobile()
@@ -1001,6 +1030,7 @@ export default function RoadTripPlanner() {
             onViewFullTrip={handleViewFullTrip}
             onStartNewTrip={handleStartNewTrip}
           />
+          <p className="mt-2 text-center text-[10px] uppercase tracking-wide text-muted-foreground/80">{BUILD_MARKER}</p>
         </section>
         </div>
       </div>
