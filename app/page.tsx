@@ -845,12 +845,12 @@ export default function RoadTripPlanner() {
                     </div>
                     <div className="flex items-center gap-3">
                       <Dog className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <span className="text-sm text-foreground truncate">{stop.dogWalks[0]?.name ?? 'Dog walk option'}</span>
+                      <span className="text-sm text-foreground truncate">{stop.dogWalks[0]?.name ?? "Dog walk option"}</span>
                     </div>
-                    {recommendedStay && (
+                    {stop.stayOptions[0] && (
                       <div className="flex items-center gap-3">
                         <MapPinIcon className="w-4 h-4 text-muted-foreground shrink-0" />
-                        <span className="text-sm text-foreground truncate">{recommendedStay.name}</span>
+                        <span className="text-sm text-foreground truncate">{stop.stayOptions[0].name}</span>
                       </div>
                     )}
                   </div>
