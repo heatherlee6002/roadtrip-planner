@@ -1,8 +1,11 @@
 "use client"
 
+import { useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Tent, Dog, MapPin, AlertTriangle, ShoppingCart, Fuel, Navigation, Info } from "lucide-react"
-import { getStopById, type StopData } from "@/lib/stops-data"
+import { Badge } from "@/components/ui/badge"
+import { ArrowLeft, Dog, MapPin, Navigation, ShieldAlert, ShowerHead, ShoppingCart } from "lucide-react"
+import { getStayOptions, getStopById, stopsData, type StayOption, type StopData } from "@/lib/stops-data"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 
 interface StopDetailScreenProps {
   stopId: string
@@ -10,10 +13,122 @@ interface StopDetailScreenProps {
   onNavigateToStop?: (stopId: string) => void
 }
 
-export function StopDetailScreen({ stopId, onBack, onNavigateToStop }: StopDetailScreenProps) {
-  const stop = getStopById(stopId)
+const warningColors: Record<number, string> = {
+  1: "bg-emerald-500/15 text-emerald-600 border-emerald-500/30",
+  2: "bg-lime-500/15 text-lime-700 border-lime-500/30",
+  3: "bg-amber-500/15 text-amber-700 border-amber-500/30",
+  4: "bg-orange-500/15 text-orange-700 border-orange-500/30",
+  5: "bg-red-500/15 text-red-700 border-red-500/30",
+}
 
-  if (!stop) {
+function StayOptionCard({ option, selected, onSelect, decisionMode }: { option: StayOption; selected: boolean; onSelect: () => void; decisionMode: boolean }) {
+  return (
+    <button
+      onClick={onSelect}
+      className={`rounded-xl border p-3 text-left transition ${selected ? "border-primary bg-primary/5" : "border-border bg-card hover:border-primary/50"} ${option.label === "A" ? "ring-1 ring-emerald-400/40" : ""}`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-secondary text-sm font-semibold">{option.label}</span>
+          <p className="text-sm font-semibold text-foreground">{option.type}</p>
+        </div>
+        {option.label === "A" && <Badge className="bg-emerald-600 text-white">Recommended</Badge>}
+      </div>
+      <p className="mt-2 text-sm font-medium text-foreground">{option.name}</p>
+      <p className="text-xs text-muted-foreground">{option.location}</p>
+
+      <div className={`mt-3 ${decisionMode ? "grid grid-cols-2 gap-2" : "space-y-1.5"}`}>
+        <p className="text-xs text-muted-foreground">🐕 {option.dogFriendly ? "Dog friendly" : "Not dog friendly"}</p>
+        <p className="text-xs text-muted-foreground">🚿 Shower: {option.shower}</p>
+        <p className="text-xs text-muted-foreground col-span-full">🛒 Grocery: {option.groceryNearby}</p>
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">{option.notes}</p>
+    </button>
+  )
+}
+
+function StopDetails({ stop, onNavigateToStop }: { stop: StopData; onNavigateToStop?: (stopId: string) => void }) {
+  const [selectedStay, setSelectedStay] = useState<"A" | "B" | "C" | "D">("A")
+  const [decisionMode, setDecisionMode] = useState(true)
+  const stayOptions = useMemo(() => getStayOptions(stop), [stop])
+
+  return (
+    <div className="space-y-4">
+      <section className="rounded-xl border bg-card p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-lg font-semibold">{stop.name}</h2>
+            <p className="text-sm text-muted-foreground">{stop.state} • {stop.driveTimeFromPrev} from previous • {stop.stayDuration}</p>
+          </div>
+          <Badge className={warningColors[stop.areaWarnings.rating]}>
+            <ShieldAlert className="mr-1 h-3.5 w-3.5" />
+            Warning {stop.areaWarnings.rating}/5
+          </Badge>
+        </div>
+        <p className="mt-2 text-sm text-muted-foreground">{stop.areaWarnings.summary}</p>
+        <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1 rounded-md border px-2 py-1"><Dog className="h-3.5 w-3.5" /> Dog friendly options available</span>
+          <span className="inline-flex items-center gap-1 rounded-md border px-2 py-1"><ShowerHead className="h-3.5 w-3.5" /> {stop.showerInfo}</span>
+          <span className="inline-flex items-center gap-1 rounded-md border px-2 py-1"><ShoppingCart className="h-3.5 w-3.5" /> {stop.groceryNearby}</span>
+        </div>
+      </section>
+
+      <section className="rounded-xl border bg-card p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-semibold uppercase tracking-wide">Decision Mode</h3>
+          <Button size="sm" variant={decisionMode ? "default" : "outline"} onClick={() => setDecisionMode((v) => !v)}>
+            {decisionMode ? "Compare On" : "Compare Off"}
+          </Button>
+        </div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {stayOptions.map((option) => (
+            <StayOptionCard
+              key={option.label}
+              option={option}
+              selected={selectedStay === option.label}
+              onSelect={() => setSelectedStay(option.label)}
+              decisionMode={decisionMode}
+            />
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-xl border bg-card p-4">
+        <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide">Nearby Dog Walks</h3>
+        <div className="space-y-2">
+          {stop.dogWalks.map((walk) => (
+            <div key={walk.name} className="rounded-lg border bg-background p-3">
+              <p className="text-sm font-medium">{walk.name}</p>
+              <p className="text-xs text-muted-foreground">Type: {walk.type}</p>
+              <p className="text-xs font-medium text-amber-700">Leash required: {walk.leashRequired ? "Yes" : "No"}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-xl border bg-card p-4">
+        <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide">Next</h3>
+        <div className="flex flex-wrap gap-2">
+          {stop.next.map((option, idx) => (
+            <Button key={idx} variant="outline" onClick={() => option.stopId && onNavigateToStop?.(option.stopId)}>
+              <MapPin className="mr-1 h-4 w-4" />
+              {option.label}
+            </Button>
+          ))}
+          <Button onClick={() => window.open(`http://maps.apple.com/?daddr=${encodeURIComponent(stop.appleMapsQuery)}`, "_blank")}> 
+            <Navigation className="mr-1 h-4 w-4" /> Navigate
+          </Button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+export function StopDetailScreen({ stopId, onBack, onNavigateToStop }: StopDetailScreenProps) {
+  const [selectedStopId, setSelectedStopId] = useState(stopId)
+  const selectedStop = getStopById(selectedStopId)
+
+  if (!selectedStop) {
     return (
       <main className="h-[100dvh] bg-background flex items-center justify-center">
         <p className="text-muted-foreground">Stop not found</p>
@@ -21,213 +136,46 @@ export function StopDetailScreen({ stopId, onBack, onNavigateToStop }: StopDetai
     )
   }
 
-  const openAppleMaps = () => {
-    const url = `http://maps.apple.com/?daddr=${encodeURIComponent(stop.appleMapsQuery)}`
-    window.open(url, '_blank')
-  }
-
   return (
-    <main className="h-[100dvh] bg-background flex flex-col overflow-hidden">
-      <div className="flex-1 flex flex-col max-w-md mx-auto w-full overflow-y-auto">
-        {/* Header */}
-        <header className="flex items-center gap-3 px-4 pt-[env(safe-area-inset-top,12px)] pb-3 sticky top-0 bg-background/95 backdrop-blur-sm z-10">
-          <Button variant="ghost" size="icon" onClick={onBack} className="shrink-0 h-9 w-9">
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-lg font-semibold text-foreground truncate">{stop.name}</h1>
-            <p className="text-xs text-muted-foreground">{stop.distance} from start - {stop.phase}</p>
+    <main className="h-[100dvh] overflow-hidden bg-background">
+      <div className="mx-auto flex h-full w-full max-w-7xl flex-col lg:flex-row">
+        <aside className="border-b lg:w-[340px] lg:border-b-0 lg:border-r overflow-y-auto">
+          <div className="sticky top-0 z-10 flex items-center gap-2 border-b bg-background px-3 py-2">
+            <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="h-4 w-4" /></Button>
+            <p className="text-sm font-semibold">Route Stops</p>
           </div>
-          {/* Navigate button */}
-          <Button 
-            size="sm" 
-            className="shrink-0 gap-1.5 bg-[oklch(0.55_0.18_150)] hover:bg-[oklch(0.50_0.18_150)]"
-            onClick={openAppleMaps}
-          >
-            <Navigation className="w-3.5 h-3.5" />
-            Navigate
-          </Button>
-        </header>
 
-        <div className="flex-1 px-4 pb-[env(safe-area-inset-bottom,8px)] space-y-4">
-          {/* Stop Type Badge & Notes */}
-          {(stop.notes || stop.type !== "stay-friendly") && (
-            <div className={`p-3 rounded-lg border ${
-              stop.type === "scenic-only" 
-                ? "bg-amber-500/10 border-amber-500/30" 
-                : stop.type === "transit"
-                  ? "bg-muted border-border"
-                  : "bg-primary/10 border-primary/30"
-            }`}>
-              <div className="flex items-start gap-2">
-                <Info className={`w-4 h-4 mt-0.5 shrink-0 ${
-                  stop.type === "scenic-only" ? "text-amber-500" : "text-muted-foreground"
-                }`} />
-                <div>
-                  {stop.type !== "stay-friendly" && (
-                    <p className="text-xs font-medium text-foreground mb-1">
-                      {stop.type === "scenic-only" ? "Scenic Only Stop" : "Transit Zone"}
-                    </p>
-                  )}
-                  {stop.notes && (
-                    <p className="text-xs text-muted-foreground">{stop.notes}</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
+          <div className="hidden lg:block space-y-2 p-3">
+            {stopsData.map((stop) => (
+              <button
+                key={stop.id}
+                onClick={() => setSelectedStopId(stop.id)}
+                className={`w-full rounded-lg border p-3 text-left ${selectedStopId === stop.id ? "border-primary bg-primary/5" : "border-border bg-card"}`}
+              >
+                <p className="text-sm font-medium">{stop.shortName}</p>
+                <p className="text-xs text-muted-foreground">{stop.state} • {stop.distance}</p>
+              </button>
+            ))}
+          </div>
 
-          {/* Stay candidate options (static planning data) */}
-          {stop.stay.length > 0 && (
-            <section className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Tent className="w-4 h-4 text-primary" />
-                <h2 className="text-xs font-semibold text-foreground uppercase tracking-wide">Stay (Planning)</h2>
-              </div>
-              <div className="space-y-1.5">
-                {stop.stay.map((option) => (
-                  <div
-                    key={option.letter}
-                    className="w-full flex items-center gap-2.5 p-2.5 rounded-lg bg-card border border-border/50"
-                  >
-                    <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${
-                      option.letter === "A" ? "bg-emerald-500/20 text-emerald-500" :
-                      option.letter === "B" ? "bg-blue-500/20 text-blue-500" :
-                      option.letter === "C" ? "bg-purple-500/20 text-purple-500" :
-                      "bg-amber-500/20 text-amber-500"
-                    }`}>
-                      {option.letter}
-                    </span>
-                    <span className="text-xs text-foreground flex-1 min-w-0">{option.name}</span>
-                    {option.appleMapsQuery && (
-                      <button
-                        onClick={() => window.open(`http://maps.apple.com/?daddr=${encodeURIComponent(option.appleMapsQuery!)}`, '_blank')}
-                        className="shrink-0 w-7 h-7 rounded-full bg-[oklch(0.55_0.18_150)] hover:bg-[oklch(0.50_0.18_150)] flex items-center justify-center transition-colors"
-                      >
-                        <Navigation className="w-3.5 h-3.5 text-white" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
+          <div className="space-y-2 p-3 lg:hidden">
+            {stopsData.map((stop) => (
+              <Collapsible key={stop.id} open={selectedStopId === stop.id} onOpenChange={(open) => open && setSelectedStopId(stop.id)}>
+                <CollapsibleTrigger className="w-full rounded-lg border bg-card p-3 text-left">
+                  <p className="text-sm font-medium">{stop.shortName}</p>
+                  <p className="text-xs text-muted-foreground">{stop.state} • {stop.distance}</p>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="pt-2">
+                  <div className="rounded-md border bg-muted/20 p-2 text-xs text-muted-foreground">Tap cards below to compare A/B/C/D options.</div>
+                </CollapsibleContent>
+              </Collapsible>
+            ))}
+          </div>
+        </aside>
 
-          {/* Dog walk candidate options (static planning data) */}
-          <section className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Dog className="w-4 h-4 text-emerald-500" />
-              <h2 className="text-xs font-semibold text-foreground uppercase tracking-wide">Dog Walk (Planning)</h2>
-            </div>
-            <div className="p-2.5 rounded-lg bg-card border border-border/50 space-y-2">
-              <div className="flex items-center gap-2">
-                <p className="text-xs text-foreground flex-1">{stop.dog.primary}</p>
-                {stop.dog.primaryQuery && (
-                  <button
-                    onClick={() => window.open(`http://maps.apple.com/?daddr=${encodeURIComponent(stop.dog.primaryQuery!)}`, '_blank')}
-                    className="shrink-0 w-7 h-7 rounded-full bg-[oklch(0.55_0.18_150)] hover:bg-[oklch(0.50_0.18_150)] flex items-center justify-center transition-colors"
-                  >
-                    <Navigation className="w-3.5 h-3.5 text-white" />
-                  </button>
-                )}
-              </div>
-              {stop.dog.secondary && (
-                <div className="flex items-center gap-2">
-                  <p className="text-xs text-muted-foreground flex-1">{stop.dog.secondary}</p>
-                  {stop.dog.secondaryQuery && (
-                    <button
-                      onClick={() => window.open(`http://maps.apple.com/?daddr=${encodeURIComponent(stop.dog.secondaryQuery!)}`, '_blank')}
-                      className="shrink-0 w-7 h-7 rounded-full bg-[oklch(0.55_0.18_150)] hover:bg-[oklch(0.50_0.18_150)] flex items-center justify-center transition-colors"
-                    >
-                      <Navigation className="w-3.5 h-3.5 text-white" />
-                    </button>
-                  )}
-                </div>
-              )}
-              {stop.dog.restrictions && (
-                <p className="text-xs text-amber-500 mt-1.5 pt-1.5 border-t border-border/50">
-                  {stop.dog.restrictions}
-                </p>
-              )}
-            </div>
-          </section>
-
-          {/* Next Destinations */}
-          <section className="space-y-2">
-            <div className="flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-primary" />
-              <h2 className="text-xs font-semibold text-foreground uppercase tracking-wide">Next</h2>
-            </div>
-            <div className="flex gap-2">
-              {stop.next.map((option, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => option.stopId && onNavigateToStop?.(option.stopId)}
-                  className="flex-1 p-2.5 rounded-lg bg-card border border-border/50 hover:bg-secondary/50 transition-colors text-center"
-                >
-                  <span className="text-xs text-foreground">{option.label}</span>
-                </button>
-              ))}
-            </div>
-          </section>
-
-          {/* Emergency candidate options (static planning data) */}
-          <section className="space-y-2">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-destructive" />
-              <h2 className="text-xs font-semibold text-foreground uppercase tracking-wide">Emergency (Planning)</h2>
-            </div>
-            <div className="space-y-1.5">
-              {stop.emergency.map((option, idx) => (
-                <div
-                  key={idx}
-                  className="w-full flex items-center gap-2.5 p-2.5 rounded-lg bg-destructive/10 border border-destructive/20"
-                >
-                  <span className="text-xs text-destructive flex-1">{option.label}</span>
-                  {option.appleMapsQuery && (
-                    <button
-                      onClick={() => window.open(`http://maps.apple.com/?daddr=${encodeURIComponent(option.appleMapsQuery!)}`, '_blank')}
-                      className="shrink-0 w-7 h-7 rounded-full bg-destructive hover:bg-destructive/80 flex items-center justify-center transition-colors"
-                    >
-                      <Navigation className="w-3.5 h-3.5 text-destructive-foreground" />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          </section>
-
-          {/* Logistics */}
-          <section className="space-y-2">
-            <h2 className="text-xs font-semibold text-foreground uppercase tracking-wide">Logistics</h2>
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2 p-2.5 rounded-lg bg-card border border-border/50">
-                <ShoppingCart className="w-4 h-4 text-muted-foreground shrink-0" />
-                <span className="text-xs text-muted-foreground flex-1">{stop.logistics.groceries}</span>
-                {stop.logistics.groceriesQuery && (
-                  <button
-                    onClick={() => window.open(`http://maps.apple.com/?daddr=${encodeURIComponent(stop.logistics.groceriesQuery!)}`, '_blank')}
-                    className="shrink-0 w-7 h-7 rounded-full bg-secondary hover:bg-secondary/80 flex items-center justify-center transition-colors"
-                  >
-                    <Navigation className="w-3.5 h-3.5 text-foreground" />
-                  </button>
-                )}
-              </div>
-              <div className="flex items-center gap-2 p-2.5 rounded-lg bg-card border border-border/50">
-                <Fuel className="w-4 h-4 text-muted-foreground shrink-0" />
-                <span className="text-xs text-muted-foreground flex-1">{stop.logistics.gas}</span>
-                {stop.logistics.gasQuery && (
-                  <button
-                    onClick={() => window.open(`http://maps.apple.com/?daddr=${encodeURIComponent(stop.logistics.gasQuery!)}`, '_blank')}
-                    className="shrink-0 w-7 h-7 rounded-full bg-secondary hover:bg-secondary/80 flex items-center justify-center transition-colors"
-                  >
-                    <Navigation className="w-3.5 h-3.5 text-foreground" />
-                  </button>
-                )}
-              </div>
-            </div>
-          </section>
-        </div>
+        <section className="flex-1 overflow-y-auto p-4">
+          <StopDetails stop={selectedStop} onNavigateToStop={onNavigateToStop} />
+        </section>
       </div>
     </main>
   )
