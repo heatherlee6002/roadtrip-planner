@@ -298,6 +298,7 @@ export default function RoadTripPlanner() {
             >
               <p className="text-sm font-medium text-foreground">{stop.shortName}</p>
               <p className="text-xs text-muted-foreground">{stop.state} • {stop.distance}</p>
+              <p className="text-xs text-muted-foreground">{stop.plannedStayLabel}</p>
             </button>
           ))}
         </div>
@@ -414,6 +415,10 @@ export default function RoadTripPlanner() {
                     <div className="flex items-center gap-3">
                       <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
                       <span className="text-sm text-foreground">{stop.distance} from start</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span className="text-sm text-foreground">{stop.plannedStayLabel}</span>
                     </div>
                     <div className="flex items-center gap-3">
                       <Dog className="w-4 h-4 text-muted-foreground shrink-0" />

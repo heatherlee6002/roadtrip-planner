@@ -241,6 +241,7 @@ export function StopDetailScreen({ stopId, onBack, onNavigateToStop }: StopDetai
               >
                 <p className="text-sm font-medium">{stop.shortName}</p>
                 <p className="text-xs text-muted-foreground">{stop.state} • {stop.distance}</p>
+                <p className="text-xs text-muted-foreground">{stop.plannedStayLabel}</p>
               </button>
             ))}
           </div>
@@ -251,6 +252,7 @@ export function StopDetailScreen({ stopId, onBack, onNavigateToStop }: StopDetai
                 <CollapsibleTrigger className="w-full rounded-lg border bg-card p-3 text-left">
                   <p className="text-sm font-medium">{stop.shortName}</p>
                   <p className="text-xs text-muted-foreground">{stop.state} • {stop.distance}</p>
+                  <p className="text-xs text-muted-foreground">{stop.plannedStayLabel}</p>
                 </CollapsibleTrigger>
                 <CollapsibleContent className="pt-2">
                   <div className="rounded-md border bg-muted/20 p-2 text-xs text-muted-foreground">Tap cards below to compare A/B/C/D options.</div>
