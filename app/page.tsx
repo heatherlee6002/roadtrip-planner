@@ -32,18 +32,7 @@ export default function RoadTripPlanner() {
   const [showLocationPrompt, setShowLocationPrompt] = useState(false)
   const [stopPopupId, setStopPopupId] = useState<string | null>(null) // For stop marker panel
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number; accuracy?: number } | null>(null)
-  const [offRoutePromptSnoozedUntil, setOffRoutePromptSnoozedUntil] = useState<number | null>(null)
-  const [offRoutePromptDismissed, setOffRoutePromptDismissed] = useState(false)
-  const [kickoffStartAt, setKickoffStartAt] = useState(() => new Date().toISOString().slice(0, 16))
-  const [kickoffStayOption, setKickoffStayOption] = useState<StayOptionLabel | "custom">("A")
-  const [kickoffCustomDestination, setKickoffCustomDestination] = useState("")
-  const [kickoffManualDelayHours, setKickoffManualDelayHours] = useState(0)
-  const [arrivalCustomAt, setArrivalCustomAt] = useState("")
-  const [departureCustomAt, setDepartureCustomAt] = useState("")
-  const [nextLegOption, setNextLegOption] = useState<StayOptionLabel | "custom">("A")
-  const [nextLegCustomDestination, setNextLegCustomDestination] = useState("")
-  const [nextLegDelayHours, setNextLegDelayHours] = useState(0)
-  const [stayAdjustDays, setStayAdjustDays] = useState(1)
+
   
   // Trip state
   const [currentStopId, setCurrentStopId] = useState("0") // Start at Gloucester
@@ -75,13 +64,7 @@ export default function RoadTripPlanner() {
     setShowLocationPrompt(true)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    if (tripCompleted) return
-    const engineNextId = nextStopDecision.primaryStop?.id ?? "0"
-    if (engineNextId !== nextStopId) {
-      setNextStopId(engineNextId)
-    }
-  }, [nextStopDecision.primaryStop?.id, nextStopId, tripCompleted])
+  
 
   const handleSetCurrentStop = useCallback((stopId: string, completingTrip = false) => {
     // When user arrives at a stop or confirms location
