@@ -319,7 +319,6 @@ export default function RoadTripPlanner() {
           {stopPopupId && (() => {
             const stop = getStopById(stopPopupId)
             if (!stop) return null
-            const recommendedStay = getStayOptions(stop).find((option) => option.label === "A")
             return (
               <div className="absolute bottom-20 left-0 right-0 mx-4 animate-in slide-in-from-bottom-4 duration-200 z-[1000]">
                 <div className="bg-card border border-border rounded-2xl shadow-xl overflow-hidden">
