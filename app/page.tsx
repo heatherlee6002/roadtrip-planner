@@ -562,33 +562,7 @@ export default function RoadTripPlanner() {
               </>
             )}
           </section>
-
-          {/* Route Progress Bar */}
-          <div className="px-4 pb-2">
-            <RouteProgress
-              from={tripCompleted ? "Home" : (userLocation ? "Your location (GPS)" : (currentStop?.shortName || "Home"))}
-              to={tripCompleted ? "Trip Complete" : destinationLabel}
-              progress={tripCompleted ? 100 : progress}
-              phase={tripCompleted ? "return" : (currentStop?.phase || "outbound")}
-              tripCompleted={tripCompleted}
-            />
-          </div>
-          <div className="px-4 pb-2 space-y-2">
-            <div className="rounded-xl border border-border/50 bg-card p-3">
-              <p className="text-xs text-muted-foreground">
-                Day {timeProgress.tripDay || 1} of {timeProgress.totalPlannedDays} days
-              </p>
-              <p className="text-sm font-medium text-foreground">Trip progress: {timeProgress.percent}%</p>
-              <p className="text-xs text-muted-foreground">
-                Distance: {routeProgressData.completedDistance} / {routeProgressData.totalRouteDistance} miles
-              </p>
-              <p className="text-xs text-muted-foreground">Next leg: {routeProgressData.currentToNextDistance} miles</p>
-              <p className="text-xs text-muted-foreground">Remaining miles: {routeProgressData.remainingDistance}</p>
-              <p className="text-xs text-muted-foreground">
-                Schedule: {scheduleStatus} ({scheduleVarianceDays > 0 ? "+" : ""}
-                {scheduleVarianceDays.toFixed(1)} days)
-              </p>
-            </div>
+          
 
             {!tripExecution.tripStarted && (
               <div className="rounded-xl border border-border/50 bg-card p-3 space-y-2">
