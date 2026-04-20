@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useMemo } from "react"
 import { MapPin, Maximize2 } from "lucide-react"
 import { TripMap } from "@/components/trip-map"
+import { RouteProgress } from "@/components/route-progress"
 import { LocationPrompt } from "@/components/location-prompt"
 import { Button } from "@/components/ui/button"
 import { WhatNowScreen } from "@/components/what-now-screen"
@@ -185,6 +186,9 @@ export default function RoadTripPlanner() {
   )
   const nextStopDecision = useMemo(() => getNextStops(routeContext, routeStrategy), [routeContext, routeStrategy])
   const nextStop = getStopById(nextStopId) ?? nextStopDecision.primaryStop
+  const progress = calculateProgress(currentStopId)
+  const isReturn = currentStop?.phase === "return"
+  const destinationLabel = isReturn ? "Home / New England" : "Yellowstone / Tetons"
 
   useEffect(() => {
     // Safety migration: remove legacy trip-tracking state so planning mode always opens cleanly.
@@ -778,6 +782,18 @@ export default function RoadTripPlanner() {
             </>
           )}
         </section>
+
+
+        {/* Route Progress Bar */}
+        <div className="px-4 pb-2">
+          <RouteProgress 
+            from={tripCompleted ? "Home" : (userLocation ? "Your location (GPS)" : (currentStop?.shortName || "Home"))}
+            to={tripCompleted ? "Trip Complete" : destinationLabel}
+            progress={tripCompleted ? 100 : progress}
+            phase={tripCompleted ? "return" : (currentStop?.phase || "outbound")}
+            tripCompleted={tripCompleted}
+          />
+        </div>
 
         {/* Map Section - fills remaining space */}
         <section className="flex-1 relative min-h-0 h-full">
