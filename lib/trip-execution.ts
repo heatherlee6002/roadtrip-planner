@@ -90,15 +90,6 @@ interface OffRouteDetectionInput {
   minutesOffRoute?: number
 }
 
-export const DEFAULT_TRIP_EXECUTION_STATE: TripExecutionState = {
-  tripStarted: false,
-  tripStartAt: null,
-  currentStep: 1,
-  currentLeg: null,
-  currentMode: "baseline",
-  historyByStep: {},
-  manualAdjustmentsByStep: {},
-}
 
 export function normalizeStopData(stops: StopData[], state?: TripExecutionState): NormalizedStopData[] {
   return stops.map((stop, index) => {
