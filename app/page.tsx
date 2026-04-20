@@ -4,8 +4,6 @@ import { useState, useCallback, useEffect, useMemo } from "react"
 import { MapPin, Maximize2 } from "lucide-react"
 import { TripMap } from "@/components/trip-map"
 import { RouteProgress } from "@/components/route-progress"
-import { ActionButtons } from "@/components/action-buttons"
-import { PopupPreview } from "@/components/popup-preview"
 import { LocationPrompt } from "@/components/location-prompt"
 import { Button } from "@/components/ui/button"
 import { WhatNowScreen } from "@/components/what-now-screen"
@@ -14,16 +12,42 @@ import { StopDetailScreen } from "@/components/stop-detail-screen"
 import { stopsData, getStopById, calculateProgress } from "@/lib/stops-data"
 import { createRouteDecisionContext, getNextStops, type RouteStrategy } from "@/lib/route-engine"
 import { useGeolocation } from "@/hooks/use-geolocation"
-import { ChatPanel } from "@/components/chat-panel"
 import { Navigation, X, ChevronRight, MapPin as MapPinIcon, Clock, Dog } from "lucide-react"
 
 type Screen = "map" | "what-now" | "emergency" | "stop-detail" | "select-location"
-type Popup = "what-now" | "next-stop" | "emergency" | null
+
+const LEGACY_TRACKING_STORAGE_KEYS = [
+  "roadtrip.execution.v1",
+  "roadtrip.execution.v2",
+  "roadtrip.liveTripState",
+  "roadtrip.tripProgress",
+]
+
+function isLegacyTrackingKey(key: string) {
+  if (LEGACY_TRACKING_STORAGE_KEYS.includes(key)) return true
+
+  const normalized = key.toLowerCase()
+  return (
+    normalized.includes("roadtrip") ||
+    normalized.includes("trip") ||
+    normalized.includes("execution") ||
+    normalized.includes("progress") ||
+    normalized.includes("arrival") ||
+    normalized.includes("departure") ||
+    normalized.includes("manual") ||
+    normalized.includes("stay") ||
+    normalized.includes("delay") ||
+    normalized.includes("eta")
+  )
+}
+
+const BUILD_BRANCH = process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_REF ?? "work"
+const BUILD_SHA = (process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ?? "8a7ed05").slice(0, 7)
+const BUILD_MARKER = `BUILD MARKER: ${BUILD_BRANCH} ${BUILD_SHA}`
 
 export default function RoadTripPlanner() {
   // State management
   const [currentScreen, setCurrentScreen] = useState<Screen>("map")
-  const [activePopup, setActivePopup] = useState<Popup>(null)
   const [selectedStopId, setSelectedStopId] = useState<string | null>(null)
   const [showLocationPrompt, setShowLocationPrompt] = useState(false)
   const [stopPopupId, setStopPopupId] = useState<string | null>(null) // For stop marker panel
@@ -58,10 +82,37 @@ export default function RoadTripPlanner() {
   const nextStopDecision = useMemo(() => getNextStops(routeContext, routeStrategy), [routeContext, routeStrategy])
   const nextStop = getStopById(nextStopId) ?? nextStopDecision.primaryStop
   const progress = calculateProgress(currentStopId)
-
-  // Determine destination for progress bar
   const isReturn = currentStop?.phase === "return"
   const destinationLabel = isReturn ? "Home / New England" : "Yellowstone / Tetons"
+
+  useEffect(() => {
+    // Safety migration: remove legacy trip-tracking state so planning mode always opens cleanly.
+    for (const key of LEGACY_TRACKING_STORAGE_KEYS) {
+      window.localStorage.removeItem(key)
+      window.sessionStorage.removeItem(key)
+    }
+
+    for (let i = window.localStorage.length - 1; i >= 0; i -= 1) {
+      const key = window.localStorage.key(i)
+      if (key && isLegacyTrackingKey(key)) {
+        window.localStorage.removeItem(key)
+      }
+    }
+
+    for (let i = window.sessionStorage.length - 1; i >= 0; i -= 1) {
+      const key = window.sessionStorage.key(i)
+      if (key && isLegacyTrackingKey(key)) {
+        window.sessionStorage.removeItem(key)
+      }
+    }
+
+    for (const cookie of document.cookie.split(";")) {
+      const rawName = cookie.split("=")[0]?.trim()
+      if (rawName && isLegacyTrackingKey(rawName)) {
+        document.cookie = `${rawName}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
+      }
+    }
+  }, [])
 
   // Request location on initial load (optional - can be triggered by button)
   useEffect(() => {
@@ -93,44 +144,10 @@ export default function RoadTripPlanner() {
     }
   }, [routeStrategy])
 
-  const handleButtonClick = useCallback((type: "what-now" | "next-stop" | "emergency") => {
-    console.log("[v0] Button clicked:", type)
-    if (type === "next-stop") {
-      // Check if this is the final leg back to Gloucester
-      if (nextStopId === "0" && currentStopId === String(stopsData.length - 1)) {
-        // Complete the trip
-        handleSetCurrentStop("0", true)
-      } else if (nextStop?.appleMapsQuery) {
-        // Open Apple Maps with directions to next stop
-        const url = `http://maps.apple.com/?daddr=${encodeURIComponent(nextStop.appleMapsQuery)}`
-        window.open(url, "_blank")
-      }
-    } else {
-      if (activePopup === type) {
-        setCurrentScreen(type)
-        setActivePopup(null)
-      } else {
-        setActivePopup(type)
-      }
-    }
-  }, [activePopup, nextStop, nextStopId, currentStopId, handleSetCurrentStop])
-
-  const handlePopupExpand = useCallback(() => {
-    if (activePopup === "next-stop") {
-      setSelectedStopId(nextStopId)
-      setCurrentScreen("stop-detail")
-      setActivePopup(null)
-    } else if (activePopup) {
-      setCurrentScreen(activePopup)
-      setActivePopup(null)
-    }
-  }, [activePopup, nextStopId])
-
   const handleStopClick = useCallback((stopId: string) => {
     console.log("[v0] Stop clicked in page:", stopId)
     // Show stop popup panel instead of going directly to detail
     setStopPopupId(stopId)
-    setActivePopup(null)
   }, [])
 
   const handleBackToMap = useCallback(() => {
@@ -329,7 +346,8 @@ export default function RoadTripPlanner() {
             </>
           )}
         </section>
-        
+
+
         {/* Route Progress Bar */}
         <div className="px-4 pb-2">
           <RouteProgress 
@@ -349,19 +367,6 @@ export default function RoadTripPlanner() {
             onStopClick={handleStopClick}
             userLocation={userLocation}
           />
-          
-          {/* Popup Preview */}
-          {activePopup && (
-            <div className="z-[1000]">
-            <PopupPreview
-              type={activePopup}
-              currentStopId={currentStopId}
-              nextStopId={nextStopId}
-              onClose={() => setActivePopup(null)}
-              onExpand={handlePopupExpand}
-            />
-            </div>
-          )}
 
           {/* Stop Marker Popup Panel */}
           {stopPopupId && (() => {
@@ -397,12 +402,12 @@ export default function RoadTripPlanner() {
                     </div>
                     <div className="flex items-center gap-3">
                       <Dog className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <span className="text-sm text-foreground truncate">{stop.dog.primary.split(',')[0]}</span>
+                      <span className="text-sm text-foreground truncate">{stop.dogWalks[0]?.name ?? "Dog walk option"}</span>
                     </div>
-                    {stop.stay[0] && (
+                    {stop.stayOptions[0] && (
                       <div className="flex items-center gap-3">
                         <MapPinIcon className="w-4 h-4 text-muted-foreground shrink-0" />
-                        <span className="text-sm text-foreground truncate">{stop.stay[0].name}</span>
+                        <span className="text-sm text-foreground truncate">{stop.stayOptions[0].name}</span>
                       </div>
                     )}
                   </div>
@@ -452,23 +457,26 @@ export default function RoadTripPlanner() {
             />
           )}
         </section>
-
-        {/* Bottom Action Buttons */}
-        <section className="px-4 pt-2 pb-[max(env(safe-area-inset-bottom,8px),8px)]">
-          <ActionButtons 
-            onWhatNow={() => handleButtonClick("what-now")}
-            onNextStop={() => handleButtonClick("next-stop")}
-            onEmergency={() => handleButtonClick("emergency")}
-            activeButton={activePopup}
-            tripCompleted={tripCompleted}
-            onViewFullTrip={handleViewFullTrip}
-            onStartNewTrip={handleStartNewTrip}
-          />
+        {/* Route stop list */}
+        <section className="border-t bg-card/60 px-4 py-2 pb-[max(env(safe-area-inset-bottom,8px),8px)]">
+          <div className="mb-1 flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Route stops</p>
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground/80">{BUILD_MARKER}</p>
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {stopsData.map((stop) => (
+              <button
+                key={stop.id}
+                onClick={() => setStopPopupId(stop.id)}
+                className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-left ${stop.id === currentStopId ? "border-primary bg-primary/10" : "border-border bg-background"}`}
+              >
+                <p className="text-xs font-medium">{stop.shortName}</p>
+                <p className="text-[10px] text-muted-foreground">{stop.distance}</p>
+              </button>
+            ))}
+          </div>
         </section>
       </div>
-
-      {/* Chat Panel */}
-      <ChatPanel currentStopId={currentStopId} nextStopId={nextStopId} />
     </main>
   )
 }
