@@ -34,7 +34,6 @@ export default function RoadTripPlanner() {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number; accuracy?: number } | null>(null)
   const [offRoutePromptSnoozedUntil, setOffRoutePromptSnoozedUntil] = useState<number | null>(null)
   const [offRoutePromptDismissed, setOffRoutePromptDismissed] = useState(false)
-  const [tripExecution, setTripExecution] = useState<TripExecutionState>(DEFAULT_TRIP_EXECUTION_STATE)
   const [kickoffStartAt, setKickoffStartAt] = useState(() => new Date().toISOString().slice(0, 16))
   const [kickoffStayOption, setKickoffStayOption] = useState<StayOptionLabel | "custom">("A")
   const [kickoffCustomDestination, setKickoffCustomDestination] = useState("")
