@@ -1,9 +1,8 @@
 "use client"
 
-import { useState, useCallback, useEffect, useMemo } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { MapPin, Maximize2 } from "lucide-react"
 import { TripMap } from "@/components/trip-map"
-import { RouteProgress } from "@/components/route-progress"
 import { LocationPrompt } from "@/components/location-prompt"
 import { Button } from "@/components/ui/button"
 import { WhatNowScreen } from "@/components/what-now-screen"
@@ -18,30 +17,6 @@ import { useRouter } from "next/navigation"
 
 type Screen = "map" | "what-now" | "emergency" | "stop-detail" | "select-location"
 
-const LEGACY_TRACKING_STORAGE_KEYS = [
-  "roadtrip.execution.v1",
-  "roadtrip.execution.v2",
-  "roadtrip.liveTripState",
-  "roadtrip.tripProgress",
-]
-
-function isLegacyTrackingKey(key: string) {
-  if (LEGACY_TRACKING_STORAGE_KEYS.includes(key)) return true
-
-  const normalized = key.toLowerCase()
-  return (
-    normalized.includes("roadtrip") ||
-    normalized.includes("trip") ||
-    normalized.includes("execution") ||
-    normalized.includes("progress") ||
-    normalized.includes("arrival") ||
-    normalized.includes("departure") ||
-    normalized.includes("manual") ||
-    normalized.includes("stay") ||
-    normalized.includes("delay") ||
-    normalized.includes("eta")
-  )
-}
 
 const BUILD_BRANCH = process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_REF ?? "work"
 const BUILD_SHA = (process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ?? "8a7ed05").slice(0, 7)
