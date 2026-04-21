@@ -385,15 +385,6 @@ export function findNearestStop(lat: number, lng: number): { stop: StopData; dis
       closestStop = stop
     }
   }
-
-  export function getMilesToNextStop(stopId: string): number {
-  const stop = getStopById(stopId)
-  return stop?.distanceMilesToNext ?? 0
-}
-
-export function getMilesTraveled(stopId: string): number {
-  const stop = getStopById(stopId)
-  return stop?.totalMiles ?? 0
 }
   if (closestStop) return { stop: closestStop, distanceMiles: Math.round(minDistance) }
   return null
