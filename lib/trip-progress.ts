@@ -274,3 +274,17 @@ export function getTimingState(params: {
 
   return "on_track"
 }
+export function buildInitialTripProgressState() {
+  return {
+    config: {
+      timezone: "America/New_York",
+      maxDriveHoursPerDay: 6,
+      avoidNightArrival: true,
+    },
+    runtime: {
+      isStarted: false,
+    },
+    stopProgress: {},
+    arrivals: {},
+  }
+}
