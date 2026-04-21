@@ -1,0 +1,123 @@
+import {
+  ActualArrival,
+  StopProgressRecord,
+  TimingState,
+  TripProgressState,
+} from "@/types/trip-progress";
+
+export type StopWithTiming = {
+  id: string;
+  order: number;
+  plannedDayOffset: number;
+};
+
+function toLocalInputDate(date: Date) {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function toLocalInputTime(date: Date) {
+  const hours = `${date.getHours()}`.padStart(2, "0");
+  const minutes = `${date.getMinutes()}`.padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+export function getNowPrefill() {
+  const now = new Date();
+  return {
+    date: toLocalInputDate(now),
+    time: toLocalInputTime(now),
+  };
+}
+
+export function combineLocalDateAndTime(date: string, time: string) {
+  return new Date(`${date}T${time}:00`).toISOString();
+}
+
+export function getExpectedStopDate(
+  actualDepartureAt: string | undefined,
+  plannedDayOffset: number
+) {
+  if (!actualDepartureAt) return null;
+  const start = new Date(actualDepartureAt);
+  const expected = new Date(start);
+  expected.setDate(expected.getDate() + plannedDayOffset);
+  return expected;
+}
+
+export function getTimingState(params: {
+  runtimeStarted: boolean;
+  actualDepartureAt?: string;
+  stopProgress?: StopProgressRecord;
+  stopArrival?: ActualArrival;
+  plannedDayOffset: number;
+  now?: Date;
+}): TimingState {
+  const {
+    runtimeStarted,
+    actualDepartureAt,
+    stopProgress,
+    stopArrival,
+    plannedDayOffset,
+    now = new Date(),
+  } = params;
+
+  if (stopProgress?.userState === "skipped") return "on_track";
+  if (!runtimeStarted || !actualDepartureAt) return "on_track";
+
+  const expected = getExpectedStopDate(actualDepartureAt, plannedDayOffset);
+  if (!expected) return "on_track";
+
+  if (stopProgress?.userState === "done" && stopArrival?.arrivedAt) {
+    const arrived = new Date(stopArrival.arrivedAt).getTime();
+    const expectedTime = expected.getTime();
+    const diffMs = arrived - expectedTime;
+
+    if (diffMs < -12 * 60 * 60 * 1000) return "ahead";
+    if (diffMs > 12 * 60 * 60 * 1000) return "delayed";
+    return "on_track";
+  }
+
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+
+  const todayEnd = new Date(now);
+  todayEnd.setHours(23, 59, 59, 999);
+
+  const expectedTime = expected.getTime();
+
+  if (expectedTime < todayStart.getTime()) return "delayed";
+  if (expectedTime <= todayEnd.getTime()) return "due_today";
+  return "on_track";
+}
+
+export function getNextUpcomingStopId<T extends StopWithTiming>(
+  stops: T[],
+  progress: TripProgressState
+) {
+  const sorted = [...stops].sort((a, b) => a.order - b.order);
+
+  const next = sorted.find((stop) => {
+    const state = progress.stopProgress[stop.id]?.userState ?? "upcoming";
+    return state === "upcoming";
+  });
+
+  return next?.id;
+}
+
+export function buildInitialTripProgressState(): TripProgressState {
+  return {
+    config: {
+      timezone: "America/New_York",
+      maxDriveHoursPerDay: 6,
+      avoidNightArrival: true,
+    },
+    runtime: {
+      isStarted: false,
+    },
+    stopProgress: {},
+    arrivals: {},
+  };
+}
