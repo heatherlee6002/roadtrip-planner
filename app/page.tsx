@@ -3,13 +3,13 @@
 import { useState, useCallback, useEffect } from "react"
 import {
   MapPin,
-  Maximize2,
   Navigation,
   X,
   ChevronRight,
   MapPin as MapPinIcon,
-  Clock,
+  Route,
   Dog,
+  BedSingle,
 } from "lucide-react"
 import { TripMap } from "@/components/trip-map"
 import { LocationPrompt } from "@/components/location-prompt"
@@ -19,6 +19,7 @@ import { EmergencyScreen } from "@/components/emergency-screen"
 import { StopDetailScreen } from "@/components/stop-detail-screen"
 import {
   stopsData,
+  calculateProgress,
   getStopById,
   getMilesToNextStop,
   getMilesTraveled,
@@ -60,6 +61,8 @@ export default function RoadTripPlanner() {
   } = useGeolocation()
 
   const currentStop = getStopById(currentStopId)
+  const currentStopIndex = stopsData.findIndex((stop) => stop.id === currentStopId)
+  const tripProgress = tripCompleted ? 100 : calculateProgress(currentStopId)
 
   const milesToNextStop = tripCompleted ? 0 : getMilesToNextStop(currentStopId)
   const milesTraveled = getMilesTraveled(currentStopId)
@@ -219,34 +222,60 @@ export default function RoadTripPlanner() {
     <main className="h-[100dvh] bg-background flex flex-col overflow-hidden">
       <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-[35%_65%] h-screen">
         <div className="hidden md:block lg:overflow-y-auto border-b lg:border-b-0 lg:border-r p-3 space-y-2">
+          <div className="pb-2 border-b border-border/50">
+            <h2 className="text-lg font-semibold text-foreground">Route Stops</h2>
+          </div>
           {stopsData.map((stop) => (
-            <button
-              key={stop.id}
-              onClick={() => {
-                setSelectedStopId(stop.id)
-                handleStopClick(stop.id)
-              }}
-              className={`w-full rounded-lg border p-3 text-left transition-colors ${
-                stop.id === currentStopId ? "border-primary bg-primary/10" : "border-border bg-card hover:border-primary/50"
-              }`}
-            >
-              <p className="text-sm font-medium text-foreground">{stop.shortName}</p>
-              <p className="text-xs text-muted-foreground">{stop.state}</p>
-              <p className="text-xs text-muted-foreground">
-                {getMilesToNextStop(stop.id)} mi to next stop
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {getMilesTraveled(stop.id)} mi traveled
-              </p>
-              <p className="text-xs text-muted-foreground">{stop.plannedStayLabel}</p>
-            </button>
+            (() => {
+              const stopIndex = stopsData.findIndex((item) => item.id === stop.id)
+              const isCurrent = stop.id === currentStopId
+              const isCompleted = stopIndex >= 0 && stopIndex < currentStopIndex
+
+              return (
+                <button
+                  key={stop.id}
+                  onClick={() => {
+                    setSelectedStopId(stop.id)
+                    handleStopClick(stop.id)
+                  }}
+                  className={`w-full rounded-xl border p-3 text-left transition-all ${
+                    isCurrent
+                      ? "border-primary bg-primary/10 shadow-[0_0_0_1px_rgba(45,212,191,0.45),0_0_24px_rgba(45,212,191,0.15)]"
+                      : isCompleted
+                        ? "border-border/50 bg-card/40 opacity-65 hover:opacity-80"
+                        : "border-border bg-card hover:border-primary/40"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`h-9 w-9 shrink-0 rounded-full border text-sm font-semibold flex items-center justify-center ${
+                        isCurrent
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : isCompleted
+                            ? "bg-muted/50 text-muted-foreground border-border/60"
+                            : "bg-secondary text-foreground border-border"
+                      }`}
+                    >
+                      {stop.stepNumber || "S"}
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-foreground truncate">{stop.shortName}</p>
+                      <p className="text-xs text-muted-foreground truncate">{stop.subtitle || stop.state}</p>
+                    </div>
+
+                    <p className="text-xs text-muted-foreground shrink-0">{stop.plannedStayLabel}</p>
+                  </div>
+                </button>
+              )
+            })()
           ))}
         </div>
 
         <div className="min-h-0 flex flex-col h-full w-full">
-          <section className="flex items-center justify-between px-4 pt-[env(safe-area-inset-top,12px)] pb-2">
+          <section className="px-4 pt-[env(safe-area-inset-top,12px)] pb-2 border-b border-border/50 space-y-2">
             {tripCompleted ? (
-              <>
+              <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <span className="text-xl">🎉</span>
                   <div>
@@ -254,45 +283,44 @@ export default function RoadTripPlanner() {
                     <p className="text-xs text-muted-foreground">Back in Gloucester, MA</p>
                   </div>
                 </div>
-                <Button variant="outline" size="sm" className="text-xs gap-1.5 h-8">
-                  <Maximize2 className="w-3.5 h-3.5" />
-                  Overview
-                </Button>
-              </>
+              </div>
             ) : (
-              <>
-                <div className="flex items-center gap-2">
-                  <MapPin className="w-5 h-5 text-primary" />
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-primary/20 text-primary flex items-center justify-center">
+                    <MapPin className="w-5 h-5" />
+                  </div>
                   <div>
                     <div>
                       <span className="text-sm text-muted-foreground">You are near </span>
-                      <span className="text-sm font-semibold text-foreground">{currentStop?.shortName || "Home"}</span>
+                      <span className="text-xl font-bold text-foreground">{currentStop?.shortName || "Home"}</span>
                     </div>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-sm text-muted-foreground">
                       {milesToNextStop} mi to next stop • {milesTraveled} mi traveled
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" className="text-xs gap-1.5 h-8">
-                    <Maximize2 className="w-3.5 h-3.5" />
-                    Overview
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-xs text-primary border-primary h-8"
-                    onClick={() => {
-                      requestLocation()
-                      setShowLocationPrompt(true)
-                    }}
-                  >
-                    Locate Me
-                  </Button>
-                </div>
-              </>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs text-primary border-primary h-8"
+                  onClick={() => {
+                    requestLocation()
+                    setShowLocationPrompt(true)
+                  }}
+                >
+                  Locate Me
+                </Button>
+              </div>
             )}
+
+            <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
+              <div
+                className="h-full bg-primary transition-all duration-500 rounded-full"
+                style={{ width: `${Math.max(2, tripProgress)}%` }}
+              />
+            </div>
           </section>
 
           <section className="flex-1 relative min-h-0 h-full">
@@ -330,22 +358,24 @@ export default function RoadTripPlanner() {
                     </div>
 
                     <div className="p-4 space-y-3">
-                      <div className="flex items-center gap-3">
-                        <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
-                        <span className="text-sm text-foreground">
-                          {getMilesToNextStop(stop.id)} mi to next stop
-                        </span>
-                      </div>
+                      <p className="text-xs text-muted-foreground">{stop.subtitle || stop.state}</p>
+
+                      {stop.distanceMilesToNext > 0 && (
+                        <div className="flex items-center gap-3">
+                          <Route className="w-4 h-4 text-muted-foreground shrink-0" />
+                          <span className="text-sm text-foreground">{stop.distanceMilesToNext} mi to next stop</span>
+                        </div>
+                      )}
+
+                      {stop.totalMiles >= 0 && (
+                        <div className="flex items-center gap-3">
+                          <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
+                          <span className="text-sm text-foreground">{stop.totalMiles} mi traveled</span>
+                        </div>
+                      )}
 
                       <div className="flex items-center gap-3">
-                        <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
-                        <span className="text-sm text-foreground">
-                          {getMilesTraveled(stop.id)} mi traveled
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-3">
-                        <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <BedSingle className="w-4 h-4 text-muted-foreground shrink-0" />
                         <span className="text-sm text-foreground">{stop.plannedStayLabel}</span>
                       </div>
 
@@ -432,13 +462,7 @@ export default function RoadTripPlanner() {
                     stop.id === currentStopId ? "border-primary bg-primary/10" : "border-border bg-background"
                   }`}
                 >
-                  <p className="text-xs font-medium">{stop.shortName}</p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {getMilesToNextStop(stop.id)} mi next
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {getMilesTraveled(stop.id)} mi traveled
-                  </p>
+                  <p className="text-xs font-medium">{stop.stepNumber || stop.shortName}</p>
                 </button>
               ))}
             </div>
