@@ -10,6 +10,7 @@ import { EmergencyScreen } from "@/components/emergency-screen"
 import { StopDetailScreen } from "@/components/stop-detail-screen"
 import { stopsData, getStopById } from "@/lib/stops-data"
 import { createRouteDecisionContext, getNextStops, type RouteStrategy } from "@/lib/route-engine"
+import { getMilesToNextStop, getMilesTraveled } from "@/lib/PASTE_YOUR_LIB_FILE_NAME_HERE"
 import { useGeolocation } from "@/hooks/use-geolocation"
 import { Navigation, X, ChevronRight, MapPin as MapPinIcon, Clock, Dog } from "lucide-react"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -53,8 +54,18 @@ export default function RoadTripPlanner() {
 
 
   const currentStop = getStopById(currentStopId)
-  const currentStep = Number.parseInt(currentStopId, 10)
-  const tripNow = new Date()
+const currentStep = Number.parseInt(currentStopId, 10)
+
+const isHomeStart = currentStopId === "0"
+const activeRouteStep = Number.isNaN(currentStep) || currentStep < 1 ? 1 : currentStep
+
+const milesToNextStop = tripCompleted
+  ? 0
+  : isHomeStart
+    ? getMilesToNextStop(1)
+    : getMilesToNextStop(activeRouteStep)
+
+const milesTraveled = isHomeStart ? 0 : getMilesTraveled(activeRouteStep)
 
 
   // Request location on initial load (optional - can be triggered by button)
@@ -279,10 +290,15 @@ export default function RoadTripPlanner() {
               <>
                 <div className="flex items-center gap-2">
                   <MapPin className="w-5 h-5 text-primary" />
-                  <div>
-                    <span className="text-sm text-muted-foreground">You are near </span>
-                    <span className="text-sm font-semibold text-foreground">{currentStop?.shortName || "Home"}</span>
-                  </div>
+                 <div>
+  <div>
+    <span className="text-sm text-muted-foreground">You are near </span>
+    <span className="text-sm font-semibold text-foreground">{currentStop?.shortName || "Home"}</span>
+  </div>
+  <p className="text-xs text-muted-foreground">
+    {milesToNextStop} miles to next stop / {milesTraveled} miles traveled
+  </p>
+</div>
                 </div>
                 <div className="flex items-center gap-2">
                   <Button variant="outline" size="sm" className="text-xs gap-1.5 h-8">
