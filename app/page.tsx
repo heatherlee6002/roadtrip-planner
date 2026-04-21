@@ -55,7 +55,9 @@ export default function RoadTripPlanner() {
   const [, setNextStopId] = useState("1")
   const [tripCompleted, setTripCompleted] = useState(false)
   const [routeStrategy] = useState<RouteStrategy>("fallback")
-
+  const [progress, setProgress] = useState<TripProgressState>(buildInitialTripProgressState())
+  const [startOpen, setStartOpen] = useState(false)
+  const [arrivalStopId, setArrivalStopId] = useState<string | null>(null)
   const {
     latitude,
     longitude,
@@ -72,7 +74,24 @@ export default function RoadTripPlanner() {
 
   const milesToNextStop = tripCompleted ? 0 : getMilesToNextStop(currentStopId)
   const milesTraveled = getMilesTraveled(currentStopId)
+  const nextPlannedStopId = getNextUpcomingStopId(
+  stopsData.map((stop, index) => ({
+    id: stop.id,
+    order: index,
+    plannedDayOffset: index,
+  })),
+  progress
+)
 
+const nextPlannedStop = nextPlannedStopId ? getStopById(nextPlannedStopId) : null
+
+const currentTimingState = getTimingState({
+  runtimeStarted: progress.runtime.isStarted,
+  actualDepartureAt: progress.runtime.actualDepartureAt,
+  stopProgress: progress.stopProgress[currentStopId],
+  stopArrival: progress.arrivals[currentStopId],
+  plannedDayOffset: currentStopIndex >= 0 ? currentStopIndex : 0,
+})
   useEffect(() => {
     requestLocation()
     setShowLocationPrompt(true)
@@ -138,6 +157,73 @@ export default function RoadTripPlanner() {
   const handleLocationRetry = useCallback(() => {
     requestLocation()
   }, [requestLocation])
+  const handleStartTrip = useCallback(
+  (payload: {
+    startDate: string
+    departureTime: string
+    timezone: string
+    maxDriveHoursPerDay?: number
+    avoidNightArrival: boolean
+  }) => {
+    const actualDepartureAt = combineLocalDateAndTime(payload.startDate, payload.departureTime)
+
+    setProgress((prev) => ({
+      ...prev,
+      config: {
+        ...prev.config,
+        plannedStartDate: payload.startDate,
+        plannedDepartureTime: payload.departureTime,
+        timezone: payload.timezone,
+        maxDriveHoursPerDay: payload.maxDriveHoursPerDay,
+        avoidNightArrival: payload.avoidNightArrival,
+      },
+      runtime: {
+        ...prev.runtime,
+        isStarted: true,
+        actualDepartureAt,
+      },
+    }))
+
+    setStartOpen(false)
+  },
+  []
+)
+
+const handleLogArrival = useCallback(
+  (stopId: string, payload: { arrivalDate: string; arrivalTime: string; actualStay?: string; notes?: string }) => {
+    const arrivedAt = combineLocalDateAndTime(payload.arrivalDate, payload.arrivalTime)
+
+    setProgress((prev) => ({
+      ...prev,
+      arrivals: {
+        ...prev.arrivals,
+        [stopId]: {
+          stopId,
+          arrivedAt,
+          actualStay: payload.actualStay,
+          notes: payload.notes,
+        },
+      },
+      stopProgress: {
+        ...prev.stopProgress,
+        [stopId]: {
+          stopId,
+          userState: "done",
+        },
+      },
+    }))
+
+    if (stopId === currentStopId) {
+      const nextIndex = currentStopIndex + 1
+      if (nextIndex < stopsData.length) {
+        setCurrentStopId(stopsData[nextIndex].id)
+      }
+    }
+
+    setArrivalStopId(null)
+  },
+  [currentStopId, currentStopIndex]
+)
 
   if (currentScreen === "what-now") {
     return (
@@ -637,6 +723,22 @@ export default function RoadTripPlanner() {
           </section>
         </div>
       </div>
+            <StartTripDialog
+        open={startOpen}
+        onClose={() => setStartOpen(false)}
+        onConfirm={handleStartTrip}
+        initialConfig={progress.config}
+      />
+
+      <LogArrivalDialog
+        open={Boolean(arrivalStopId)}
+        stopName={getStopById(arrivalStopId ?? "")?.shortName ?? ""}
+        onClose={() => setArrivalStopId(null)}
+        onConfirm={(payload) => {
+          if (!arrivalStopId) return
+          handleLogArrival(arrivalStopId, payload)
+        }}
+      />
     </main>
   )
 }

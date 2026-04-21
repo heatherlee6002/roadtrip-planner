@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Dog, MapPin, Navigation, ShieldAlert, ShowerHead, ShoppingCart } from "lucide-react"
-import { getStayOptions, getStopById, stopsData, type StayOption, type StopData } from "@/lib/stops-data"
+import { ArrowLeft, Dog, ExternalLink, MapPin, Navigation, ShieldAlert, ShowerHead, ShoppingCart } from "lucide-react"
+import { getStayOptions, getStopById, stopsData, type StayOption, type StopData, type StayRecommendation } from "@/lib/stops-data"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 
 interface StopDetailScreenProps {
@@ -30,12 +30,29 @@ function StayOptionCard({ option, selected, onSelect }: { option: StayOption; se
     )
   }
 
+function RecommendationCard({ recommendation }: { recommendation: StayRecommendation }) {
   return (
     <button
-      onClick={() => {
-        onSelect()
-        openStayOnMap()
-      }}
+      type="button"
+      onClick={() => openAppleMaps(recommendation.appleMapsQuery)}
+      className="rounded-lg border bg-background p-3 text-left transition hover:border-primary/40"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-sm font-medium text-foreground">{recommendation.name}</p>
+          <p className="text-xs text-muted-foreground">{recommendation.location}</p>
+        </div>
+        <ExternalLink className="mt-0.5 h-4 w-4 text-muted-foreground" />
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">{recommendation.notes}</p>
+    </button>
+  )
+}
+
+function StayOptionCard({ option, selected, onSelect, decisionMode }: { option: StayOption; selected: boolean; onSelect: () => void; decisionMode: boolean }) {
+  return (
+    <button
+      onClick={onSelect}
       className={`rounded-xl border p-3 text-left transition ${selected ? "border-primary bg-primary/5" : "border-border bg-card hover:border-primary/50"} ${option.label === "A" ? "border-emerald-400/60 bg-emerald-50/40 shadow-sm" : ""}`}
     >
       <div className="flex items-center justify-between gap-2">
@@ -64,19 +81,38 @@ function StayOptionCard({ option, selected, onSelect }: { option: StayOption; se
         <p className="text-xs text-muted-foreground col-span-full">Comfort: {option.rating.comfort}/5</p>
       </div>
       <p className="mt-2 text-xs text-muted-foreground">{option.notes}</p>
-      <div className="mt-3">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="cursor-pointer"
-          onClick={(event) => {
-            event.stopPropagation()
-            openStayOnMap()
-          }}
-        >
-          View on Map
-        </Button>
+
+      <div className="mt-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">3 recommendations</p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="cursor-pointer"
+            onClick={(event) => {
+              event.stopPropagation()
+              const firstRecommendation = option.recommendations[0]
+              if (firstRecommendation) {
+                openAppleMaps(firstRecommendation.appleMapsQuery)
+              }
+            }}
+          >
+            Open Top Pick
+          </Button>
+        </div>
+        <div className="grid gap-2">
+          {option.recommendations.map((recommendation) => (
+            <div
+              key={recommendation.id}
+              onClick={(event) => {
+                event.stopPropagation()
+              }}
+            >
+              <RecommendationCard recommendation={recommendation} />
+            </div>
+          ))}
+        </div>
       </div>
     </button>
   )
@@ -86,10 +122,7 @@ function StopDetails({ stop, onNavigateToStop }: { stop: StopData; onNavigateToS
   const [selectedStay, setSelectedStay] = useState<"A" | "B" | "C" | "D">("A")
   const [showCompare, setShowCompare] = useState(false)
   const stayOptions = useMemo(() => getStayOptions(stop), [stop])
-  console.log("Stay options:", stayOptions)
-  if (!stayOptions || stayOptions.length !== 4) {
-    console.warn("Missing stay options", stop.name, stayOptions)
-  }
+
   const maxConvenience = Math.max(...stayOptions.map((option) => option.rating.convenience), 0)
   const maxCost = Math.max(...stayOptions.map((option) => option.rating.cost), 0)
   const maxComfort = Math.max(...stayOptions.map((option) => option.rating.comfort), 0)
@@ -144,6 +177,7 @@ function StopDetails({ stop, onNavigateToStop }: { stop: StopData; onNavigateToS
                   <th className="p-2 text-left">Convenience</th>
                   <th className="p-2 text-left">Cost</th>
                   <th className="p-2 text-left">Comfort</th>
+                  <th className="p-2 text-left">Recs</th>
                 </tr>
               </thead>
               <tbody>
@@ -157,6 +191,7 @@ function StopDetails({ stop, onNavigateToStop }: { stop: StopData; onNavigateToS
                       <td className={`p-2 ${option.rating.convenience === maxConvenience ? "font-semibold text-emerald-600" : ""}`}>{option.rating.convenience}</td>
                       <td className={`p-2 ${option.rating.cost === maxCost ? "font-semibold text-emerald-600" : ""}`}>{option.rating.cost}</td>
                       <td className={`p-2 ${option.rating.comfort === maxComfort ? "font-semibold text-emerald-600" : ""}`}>{option.rating.comfort}</td>
+                      <td className="p-2">{option.recommendations.length}</td>
                     </tr>
                   )
                 })}
@@ -173,12 +208,7 @@ function StopDetails({ stop, onNavigateToStop }: { stop: StopData; onNavigateToS
             <button
               key={walk.name}
               type="button"
-              onClick={() =>
-                window.open(
-                  `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(walk.name)}`,
-                  "_blank"
-                )
-              }
+              onClick={() => openAppleMaps(walk.name)}
               className="w-full rounded-lg border bg-background p-3 text-left cursor-pointer hover:border-primary/40"
             >
               <p className="text-sm font-medium">{walk.name}</p>
@@ -198,7 +228,7 @@ function StopDetails({ stop, onNavigateToStop }: { stop: StopData; onNavigateToS
               {option.label}
             </Button>
           ))}
-          <Button onClick={() => window.open(`http://maps.apple.com/?daddr=${encodeURIComponent(stop.appleMapsQuery)}`, "_blank")}> 
+          <Button onClick={() => openAppleMaps(stop.appleMapsQuery)}>
             <Navigation className="mr-1 h-4 w-4" /> Navigate
           </Button>
         </div>
@@ -256,7 +286,7 @@ export function StopDetailScreen({ stopId, onBack, onNavigateToStop, showStopLis
                   <p className="text-xs text-muted-foreground">{stop.plannedStayLabel}</p>
                 </CollapsibleTrigger>
                 <CollapsibleContent className="pt-2">
-                  <div className="rounded-md border bg-muted/20 p-2 text-xs text-muted-foreground">Tap cards below to compare A/B/C/D options.</div>
+                  <div className="rounded-md border bg-muted/20 p-2 text-xs text-muted-foreground">Tap cards below to compare A/B/C/D options and open each recommendation in Apple Maps.</div>
                 </CollapsibleContent>
               </Collapsible>
             ))}
