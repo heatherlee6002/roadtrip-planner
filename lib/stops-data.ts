@@ -23,6 +23,14 @@ export interface DogWalk {
   leashRequired: boolean
 }
 
+export interface StayRecommendation {
+  id: string
+  name: string
+  location: string
+  notes: string
+  appleMapsQuery: string
+}
+
 export interface StayOption {
   label: StayOptionLabel
   type: string
@@ -35,6 +43,7 @@ export interface StayOption {
   isRemote: boolean
   notes: string
   rating: StayRating
+  recommendations: StayRecommendation[]
 }
 
 export interface AreaWarning {
@@ -227,6 +236,16 @@ function mapStopType(type: BaselineRouteStop["type"]): StopType {
   return "stay-friendly"
 }
 
+function buildRecommendation(label: StayOptionLabel, stop: BaselineRouteStop, index: number, searchHint: string): StayRecommendation {
+  return {
+    id: `${stop.step}-${label}-${index}`,
+    name: `${stop.name} ${label}${index}`,
+    location: stop.region,
+    notes: searchHint,
+    appleMapsQuery: `${searchHint} near ${stop.name}, ${stop.region}`,
+  }
+}
+
 function buildStayOptions(stop: BaselineRouteStop): StayOption[] {
   return [
     {
@@ -246,6 +265,11 @@ function buildStayOptions(stop: BaselineRouteStop): StayOption[] {
         cost: 3,
         comfort: 4,
       },
+      recommendations: [
+        buildRecommendation("A", stop, 1, "quiet dog friendly campground with showers"),
+        buildRecommendation("A", stop, 2, "spaced out private campground dog friendly"),
+        buildRecommendation("A", stop, 3, "safe campground near dog walking"),
+      ],
     },
     {
       label: "B",
@@ -264,6 +288,11 @@ function buildStayOptions(stop: BaselineRouteStop): StayOption[] {
         cost: 3,
         comfort: 4,
       },
+      recommendations: [
+        buildRecommendation("B", stop, 1, "quiet private campground dog friendly"),
+        buildRecommendation("B", stop, 2, "dog friendly cabin campground with showers"),
+        buildRecommendation("B", stop, 3, "safe RV park dog friendly"),
+      ],
     },
     {
       label: "C",
@@ -282,6 +311,11 @@ function buildStayOptions(stop: BaselineRouteStop): StayOption[] {
         cost: 5,
         comfort: 2,
       },
+      recommendations: [
+        buildRecommendation("C", stop, 1, "safe dispersed camping dog friendly"),
+        buildRecommendation("C", stop, 2, "national forest camping dog friendly"),
+        buildRecommendation("C", stop, 3, "BLM camping dog friendly"),
+      ],
     },
     {
       label: "D",
@@ -300,6 +334,11 @@ function buildStayOptions(stop: BaselineRouteStop): StayOption[] {
         cost: 2,
         comfort: 5,
       },
+      recommendations: [
+        buildRecommendation("D", stop, 1, "dog friendly hotel"),
+        buildRecommendation("D", stop, 2, "dog friendly motel"),
+        buildRecommendation("D", stop, 3, "dog friendly lodge"),
+      ],
     },
   ]
 }
