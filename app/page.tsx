@@ -32,7 +32,16 @@ import { useGeolocation } from "@/hooks/use-geolocation"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useRouter } from "next/navigation"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
-
+import StartTripDialog from "@/components/trip/StartTripDialog"
+import LogArrivalDialog from "@/components/trip/LogArrivalDialog"
+import {
+  buildInitialTripProgressState,
+  combineLocalDateAndTime,
+  getExpectedStopDate,
+  getNextUpcomingStopId,
+  getTimingState,
+} from "@/lib/trip-progress"
+import type { TripProgressState } from "@/types/trip-progress"
 type Screen = "map" | "what-now" | "emergency" | "stop-detail" | "select-location"
 
 const BUILD_BRANCH = process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_REF ?? "work"
