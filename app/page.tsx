@@ -17,7 +17,6 @@ import { useRouter } from "next/navigation"
 
 type Screen = "map" | "what-now" | "emergency" | "stop-detail" | "select-location"
 
-
 const BUILD_BRANCH = process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_REF ?? "work"
 const BUILD_SHA = (process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ?? "8a7ed05").slice(0, 7)
 const BUILD_MARKER = `BUILD MARKER: ${BUILD_BRANCH} ${BUILD_SHA}`
@@ -33,31 +32,28 @@ export default function RoadTripPlanner() {
   const [stopPopupId, setStopPopupId] = useState<string | null>(null) // For stop marker panel
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number; accuracy?: number } | null>(null)
 
-  
   // Trip state
   const [currentStopId, setCurrentStopId] = useState("0") // Start at Gloucester
   const [nextStopId, setNextStopId] = useState("1") // Central PA
   const [tripCompleted, setTripCompleted] = useState(false) // Track if trip is complete
   const [routeStrategy] = useState<RouteStrategy>("fallback")
-  
+
   // Geolocation
-  const { 
+  const {
     latitude,
     longitude,
     accuracy,
-    loading: geoLoading, 
-    error: geoError, 
-    nearestStop, 
-    requestLocation 
+    loading: geoLoading,
+    error: geoError,
+    nearestStop,
+    requestLocation,
   } = useGeolocation()
 
-const currentStop = getStopById(currentStopId)
-
+  const currentStop = getStopById(currentStopId)
   const currentStep = Number.parseInt(currentStopId, 10)
 
-const milesToNextStop = tripCompleted ? 0 : currentStop?.distanceMilesToNext ?? 0
-const milesTraveled = currentStop?.totalMiles ?? 0
-
+  const milesToNextStop = tripCompleted ? 0 : currentStop?.distanceMilesToNext ?? 0
+  const milesTraveled = currentStop?.totalMiles ?? 0
 
   // Request location on initial load (optional - can be triggered by button)
   useEffect(() => {
@@ -66,22 +62,23 @@ const milesTraveled = currentStop?.totalMiles ?? 0
     setShowLocationPrompt(true)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  
+  const handleSetCurrentStop = useCallback(
+    (stopId: string, completingTrip = false) => {
+      // When user arrives at a stop or confirms location
+      setCurrentStopId(stopId)
 
-  const handleSetCurrentStop = useCallback((stopId: string, completingTrip = false) => {
-    // When user arrives at a stop or confirms location
-    setCurrentStopId(stopId)
-    
-    // Check if trip is complete (back at Gloucester after going through return route)
-    if (stopId === "0" && completingTrip) {
-      setTripCompleted(true)
-      setNextStopId("0") // No next stop
-    } else {
-      const contextForStop = createRouteDecisionContext({ currentStopId: stopId, userLocation: null })
-      const decision = getNextStops(contextForStop, routeStrategy)
-      setNextStopId(decision.primaryStop?.id ?? "0")
-    }
-  }, [routeStrategy])
+      // Check if trip is complete (back at Gloucester after going through return route)
+      if (stopId === "0" && completingTrip) {
+        setTripCompleted(true)
+        setNextStopId("0") // No next stop
+      } else {
+        const contextForStop = createRouteDecisionContext({ currentStopId: stopId, userLocation: null })
+        const decision = getNextStops(contextForStop, routeStrategy)
+        setNextStopId(decision.primaryStop?.id ?? "0")
+      }
+    },
+    [routeStrategy]
+  )
 
   const handleStopClick = useCallback((stopId: string) => {
     console.log("[v0] Stop clicked in page:", stopId)
@@ -100,14 +97,6 @@ const milesTraveled = currentStop?.totalMiles ?? 0
     setSelectedStopId(stopId)
     setCurrentScreen("stop-detail")
   }, [])
-
-  const handleSkipStop = useCallback((stopId: string) => {
-    const contextAfterSkip = createRouteDecisionContext({ currentStopId: stopId, userLocation: null })
-    const alternatives = getNextStops(contextAfterSkip, routeStrategy).alternatives
-    if (alternatives[0]) {
-      setNextStopId(alternatives[0].id)
-    }
-  }, [routeStrategy])
 
   // Location prompt handlers
   const handleLocationConfirm = useCallback(() => {
@@ -137,24 +126,10 @@ const milesTraveled = currentStop?.totalMiles ?? 0
     requestLocation()
   }, [requestLocation])
 
-  const handleStartNewTrip = useCallback(() => {
-    setTripCompleted(false)
-    setCurrentStopId("0")
-    setNextStopId("1")
-    setUserLocation(null)
-    setCurrentScreen("map")
-  }, [])
-
-  const handleViewFullTrip = useCallback(() => {
-    setSelectedStopId("0")
-    setCurrentScreen("stop-detail")
-  }, [])
-
-  
   // Screen routing
   if (currentScreen === "what-now") {
     return (
-      <WhatNowScreen 
+      <WhatNowScreen
         currentStopId={currentStopId}
         onBack={handleBackToMap}
         onNavigateToStop={handleNavigateToStop}
@@ -172,13 +147,7 @@ const milesTraveled = currentStop?.totalMiles ?? 0
   }
 
   if (currentScreen === "stop-detail" && selectedStopId) {
-    return (
-      <StopDetailScreen 
-        stopId={selectedStopId} 
-        onBack={handleBackToMap}
-        onNavigateToStop={handleNavigateToStop}
-      />
-    )
+    return <StopDetailScreen stopId={selectedStopId} onBack={handleBackToMap} onNavigateToStop={handleNavigateToStop} />
   }
 
   if (currentScreen === "select-location") {
@@ -192,7 +161,7 @@ const milesTraveled = currentStop?.totalMiles ?? 0
               Cancel
             </Button>
           </section>
-          
+
           {/* Stop list */}
           <section className="flex-1 overflow-y-auto px-4 pb-4">
             <div className="space-y-2">
@@ -206,19 +175,19 @@ const milesTraveled = currentStop?.totalMiles ?? 0
                     setCurrentScreen("map")
                   }}
                   className={`w-full text-left p-3 rounded-lg border transition-colors ${
-                    stop.id === currentStopId
-                      ? "bg-primary/10 border-primary"
-                      : "bg-card border-border hover:border-primary/50"
+                    stop.id === currentStopId ? "bg-primary/10 border-primary" : "bg-card border-border hover:border-primary/50"
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold ${
-                      stop.phase === "turning-point"
-                        ? "bg-accent text-accent-foreground"
-                        : stop.id === currentStopId
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-muted-foreground"
-                    }`}>
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold ${
+                        stop.phase === "turning-point"
+                          ? "bg-accent text-accent-foreground"
+                          : stop.id === currentStopId
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted text-muted-foreground"
+                      }`}
+                    >
                       {stop.stepNumber || "S"}
                     </div>
                     <div>
@@ -281,31 +250,15 @@ const milesTraveled = currentStop?.totalMiles ?? 0
               <>
                 <div className="flex items-center gap-2">
                   <MapPin className="w-5 h-5 text-primary" />
-                 <div>
-<div>
- <div>
-<div>
-  <div>
-    <span className="text-sm text-muted-foreground">You are near </span>
-    <span className="text-sm font-semibold text-foreground">{currentStop?.shortName || "Home"}</span>
-  </div>
-  <p className="text-xs text-muted-foreground">
-    {milesToNextStop} mi to next stop • {milesTraveled} mi traveled
-  </p>
-</div>
-
-  <p className="text-xs text-muted-foreground">
-    {milesToNextStop} mi to next stop • {milesTraveled} mi traveled
-  </p>
-</div>
-  <p className="text-xs text-muted-foreground">
-    {milesToNextStop} miles to next stop / {milesTraveled} miles traveled
-  </p>
-</div>
-  <p className="text-xs text-muted-foreground">
-    {milesToNextStop} miles to next stop / {milesTraveled} miles traveled
-  </p>
-</div>
+                  <div>
+                    <div>
+                      <span className="text-sm text-muted-foreground">You are near </span>
+                      <span className="text-sm font-semibold text-foreground">{currentStop?.shortName || "Home"}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {milesToNextStop} mi to next stop • {milesTraveled} mi traveled
+                    </p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <Button variant="outline" size="sm" className="text-xs gap-1.5 h-8">
@@ -327,135 +280,132 @@ const milesTraveled = currentStop?.totalMiles ?? 0
               </>
             )}
           </section>
-          
 
-        {/* Map Section - fills remaining space */}
-        <section className="flex-1 relative min-h-0 h-full">
-          <TripMap 
-            currentStopId={currentStopId}
-            selectedStop={selectedStopId}
-            onStopClick={handleStopClick}
-            userLocation={userLocation}
-          />
+          {/* Map Section - fills remaining space */}
+          <section className="flex-1 relative min-h-0 h-full">
+            <TripMap currentStopId={currentStopId} selectedStop={selectedStopId} onStopClick={handleStopClick} userLocation={userLocation} />
 
-          {/* Stop Marker Popup Panel */}
-          {stopPopupId && (() => {
-            const stop = getStopById(stopPopupId)
-            if (!stop) return null
-            return (
-              <div className="absolute bottom-20 left-0 right-0 mx-4 animate-in slide-in-from-bottom-4 duration-200 z-[1000]">
-                <div className="bg-card border border-border rounded-2xl shadow-xl overflow-hidden">
-                  {/* Header */}
-                  <div className="bg-primary px-4 py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <MapPinIcon className="w-5 h-5 text-primary-foreground shrink-0" />
-                      <div className="min-w-0">
-                        <h3 className="text-base font-semibold text-primary-foreground truncate">{stop.name}</h3>
-                        <p className="text-xs text-primary-foreground/80">{stop.subtitle}</p>
+            {/* Stop Marker Popup Panel */}
+            {stopPopupId && (() => {
+              const stop = getStopById(stopPopupId)
+              if (!stop) return null
+              return (
+                <div className="absolute bottom-20 left-0 right-0 mx-4 animate-in slide-in-from-bottom-4 duration-200 z-[1000]">
+                  <div className="bg-card border border-border rounded-2xl shadow-xl overflow-hidden">
+                    {/* Header */}
+                    <div className="bg-primary px-4 py-3 flex items-center justify-between">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <MapPinIcon className="w-5 h-5 text-primary-foreground shrink-0" />
+                        <div className="min-w-0">
+                          <h3 className="text-base font-semibold text-primary-foreground truncate">{stop.name}</h3>
+                          <p className="text-xs text-primary-foreground/80">{stop.subtitle}</p>
+                        </div>
                       </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-primary-foreground/80 hover:text-primary-foreground hover:bg-primary-foreground/10 shrink-0"
+                        onClick={() => setStopPopupId(null)}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-primary-foreground/80 hover:text-primary-foreground hover:bg-primary-foreground/10 shrink-0"
-                      onClick={() => setStopPopupId(null)}
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
 
-                  {/* Basic info */}
-                  <div className="p-4 space-y-3">
-                    <div className="flex items-center gap-3">
-                      <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <span className="text-sm text-foreground">{stop.distance} from start</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <span className="text-sm text-foreground">{stop.plannedStayLabel}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Dog className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <span className="text-sm text-foreground truncate">{stop.dogWalks[0]?.name ?? "Dog walk option"}</span>
-                    </div>
-                    {stop.stayOptions[0] && (
+                    {/* Basic info */}
+                    <div className="p-4 space-y-3">
                       <div className="flex items-center gap-3">
-                        <MapPinIcon className="w-4 h-4 text-muted-foreground shrink-0" />
-                        <span className="text-sm text-foreground truncate">{stop.stayOptions[0].name}</span>
+                        <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <span className="text-sm text-foreground">{stop.distance} from start</span>
                       </div>
-                    )}
-                  </div>
+                      <div className="flex items-center gap-3">
+                        <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <span className="text-sm text-foreground">{stop.plannedStayLabel}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Dog className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <span className="text-sm text-foreground truncate">{stop.dogWalks[0]?.name ?? "Dog walk option"}</span>
+                      </div>
+                      {stop.stayOptions[0] && (
+                        <div className="flex items-center gap-3">
+                          <MapPinIcon className="w-4 h-4 text-muted-foreground shrink-0" />
+                          <span className="text-sm text-foreground truncate">{stop.stayOptions[0].name}</span>
+                        </div>
+                      )}
+                    </div>
 
-                  {/* Action buttons */}
-                  <div className="flex border-t border-border">
-                    <button
-                      onClick={() => {
-                        if (stop.appleMapsQuery) {
-                          const url = `http://maps.apple.com/?daddr=${encodeURIComponent(stop.appleMapsQuery)}`
-                          window.open(url, "_blank")
-                        }
-                      }}
-                      className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-[oklch(0.55_0.18_150)] hover:bg-[oklch(0.50_0.18_150)] transition-colors"
-                    >
-                      <Navigation className="w-4 h-4 text-white" />
-                      <span className="text-sm font-medium text-white">Navigate</span>
-                    </button>
-                    <button
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        if (isMobile) {
-                          router.push(`/stops/${stopPopupId}`)
+                    {/* Action buttons */}
+                    <div className="flex border-t border-border">
+                      <button
+                        onClick={() => {
+                          if (stop.appleMapsQuery) {
+                            const url = `http://maps.apple.com/?daddr=${encodeURIComponent(stop.appleMapsQuery)}`
+                            window.open(url, "_blank")
+                          }
+                        }}
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-[oklch(0.55_0.18_150)] hover:bg-[oklch(0.50_0.18_150)] transition-colors"
+                      >
+                        <Navigation className="w-4 h-4 text-white" />
+                        <span className="text-sm font-medium text-white">Navigate</span>
+                      </button>
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          if (isMobile) {
+                            router.push(`/stops/${stopPopupId}`)
+                            setStopPopupId(null)
+                            return
+                          }
+                          setSelectedStopId(stopPopupId)
+                          setCurrentScreen("stop-detail")
                           setStopPopupId(null)
-                          return
-                        }
-                        setSelectedStopId(stopPopupId)
-                        setCurrentScreen("stop-detail")
-                        setStopPopupId(null)
-                      }}
-                      className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-secondary/30 hover:bg-secondary/50 transition-colors border-l border-border"
-                    >
-                      <span className="text-sm font-medium text-primary">Full details</span>
-                      <ChevronRight className="w-4 h-4 text-primary" />
-                    </button>
+                        }}
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-secondary/30 hover:bg-secondary/50 transition-colors border-l border-border"
+                      >
+                        <span className="text-sm font-medium text-primary">Full details</span>
+                        <ChevronRight className="w-4 h-4 text-primary" />
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )
-          })()}
+              )
+            })()}
 
-          {/* Location Prompt */}
-          {showLocationPrompt && (geoLoading || geoError || nearestStop.stop) && (
-            <LocationPrompt
-              nearestStop={nearestStop.stop}
-              distanceMiles={nearestStop.distanceMiles}
-              loading={geoLoading}
-              error={geoError}
-              onConfirm={handleLocationConfirm}
-              onDismiss={handleLocationDismiss}
-              onManualSelect={handleManualLocationSelect}
-              onRetry={handleLocationRetry}
-            />
-          )}
-        </section>
-        {/* Route stop list */}
-        <section className="border-t bg-card/60 px-4 py-2 pb-[max(env(safe-area-inset-bottom,8px),8px)]">
-          <div className="mb-1 flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Route stops</p>
-            <p className="text-[10px] uppercase tracking-wide text-muted-foreground/80">{BUILD_MARKER}</p>
-          </div>
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {stopsData.map((stop) => (
-              <button
-                key={stop.id}
-                onClick={() => setStopPopupId(stop.id)}
-                className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-left ${stop.id === currentStopId ? "border-primary bg-primary/10" : "border-border bg-background"}`}
-              >
-                <p className="text-xs font-medium">{stop.shortName}</p>
-                <p className="text-[10px] text-muted-foreground">{stop.distanceMilesToNext} mi next</p>
-              </button>
-            ))}
-          </div>
-        </section>
+            {/* Location Prompt */}
+            {showLocationPrompt && (geoLoading || geoError || nearestStop.stop) && (
+              <LocationPrompt
+                nearestStop={nearestStop.stop}
+                distanceMiles={nearestStop.distanceMiles}
+                loading={geoLoading}
+                error={geoError}
+                onConfirm={handleLocationConfirm}
+                onDismiss={handleLocationDismiss}
+                onManualSelect={handleManualLocationSelect}
+                onRetry={handleLocationRetry}
+              />
+            )}
+          </section>
+
+          {/* Route stop list */}
+          <section className="border-t bg-card/60 px-4 py-2 pb-[max(env(safe-area-inset-bottom,8px),8px)]">
+            <div className="mb-1 flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Route stops</p>
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground/80">{BUILD_MARKER}</p>
+            </div>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {stopsData.map((stop) => (
+                <button
+                  key={stop.id}
+                  onClick={() => setStopPopupId(stop.id)}
+                  className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-left ${
+                    stop.id === currentStopId ? "border-primary bg-primary/10" : "border-border bg-background"
+                  }`}
+                >
+                  <p className="text-xs font-medium">{stop.shortName}</p>
+                  <p className="text-[10px] text-muted-foreground">{stop.distanceMilesToNext} mi next</p>
+                </button>
+              ))}
+            </div>
+          </section>
         </div>
       </div>
     </main>
