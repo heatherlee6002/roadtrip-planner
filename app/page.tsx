@@ -340,6 +340,43 @@ const handleLogArrival = useCallback(
         </div>
 
         <div className="relative flex-1 min-h-0 border-b border-border/50">
+
+                    <section className="px-4 py-3 border-b border-border/50 bg-card/40">
+            {!progress.runtime.isStarted ? (
+              <Button onClick={() => setStartOpen(true)}>Start Trip Tracking</Button>
+            ) : (
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-foreground">Trip Active</p>
+                  <p className="text-xs text-muted-foreground">
+                    Started:{" "}
+                    {progress.runtime.actualDepartureAt
+                      ? new Date(progress.runtime.actualDepartureAt).toLocaleString()
+                      : "—"}
+                  </p>
+                  {nextPlannedStop && (
+                    <p className="text-xs text-muted-foreground">
+                      Next planned: {nextPlannedStop.shortName} ·{" "}
+                      {getExpectedStopDate(
+                        progress.runtime.actualDepartureAt,
+                        stopsData.findIndex((s) => s.id === nextPlannedStop.id)
+                      )?.toLocaleString() ?? "—"}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                    {currentTimingState}
+                  </span>
+                  <Button variant="outline" onClick={() => setArrivalStopId(currentStopId)}>
+                    Log Actual Arrival
+                  </Button>
+                </div>
+              </div>
+            )}
+          </section>
+          
           <TripMap
             currentStopId={currentStopId}
             selectedStop={selectedStopId}
@@ -731,6 +768,22 @@ const handleLogArrival = useCallback(
           </section>
         </div>
       </div>
+            <StartTripDialog
+        open={startOpen}
+        onClose={() => setStartOpen(false)}
+        onConfirm={handleStartTrip}
+        initialConfig={progress.config}
+      />
+
+      <LogArrivalDialog
+        open={Boolean(arrivalStopId)}
+        stopName={getStopById(arrivalStopId ?? "")?.shortName ?? ""}
+        onClose={() => setArrivalStopId(null)}
+        onConfirm={(payload) => {
+          if (!arrivalStopId) return
+          handleLogArrival(arrivalStopId, payload)
+        }}
+      />
     </main>
   )
 }
