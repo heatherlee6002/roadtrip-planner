@@ -22,7 +22,7 @@ const warningColors: Record<number, string> = {
   5: "bg-red-500/15 text-red-700 border-red-500/30",
 }
 
-function StayOptionCard({ option, selected, onSelect, decisionMode }: { option: StayOption; selected: boolean; onSelect: () => void; decisionMode: boolean }) {
+function StayOptionCard({ option, selected, onSelect }: { option: StayOption; selected: boolean; onSelect: () => void }) {
   const openStayOnMap = () => {
     window.open(
       `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${option.name} ${option.location}`)}`,
@@ -54,7 +54,7 @@ function StayOptionCard({ option, selected, onSelect, decisionMode }: { option: 
       <p className="mt-2 text-sm font-medium text-foreground">{option.name}</p>
       <p className="text-xs text-muted-foreground">{option.location}</p>
 
-      <div className={`mt-3 ${decisionMode ? "grid grid-cols-2 gap-2" : "space-y-1.5"}`}>
+      <div className="mt-3 grid grid-cols-2 gap-2">
         <p className="text-xs text-muted-foreground">🐕 {option.dogFriendly ? "Dog friendly" : "Not dog friendly"}</p>
         <p className="text-xs text-muted-foreground">🚿 Shower: {option.shower}</p>
         <p className="text-xs text-muted-foreground col-span-full">🛒 Grocery: {option.groceryNearby}</p>
@@ -84,7 +84,6 @@ function StayOptionCard({ option, selected, onSelect, decisionMode }: { option: 
 
 function StopDetails({ stop, onNavigateToStop }: { stop: StopData; onNavigateToStop?: (stopId: string) => void }) {
   const [selectedStay, setSelectedStay] = useState<"A" | "B" | "C" | "D">("A")
-  const [decisionMode, setDecisionMode] = useState(true)
   const [showCompare, setShowCompare] = useState(false)
   const stayOptions = useMemo(() => getStayOptions(stop), [stop])
   console.log("Stay options:", stayOptions)
@@ -120,9 +119,6 @@ function StopDetails({ stop, onNavigateToStop }: { stop: StopData; onNavigateToS
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-sm font-semibold uppercase tracking-wide">Decision Mode</h3>
           <div className="flex items-center gap-2">
-            <Button size="sm" variant={decisionMode ? "default" : "outline"} onClick={() => setDecisionMode((v) => !v)}>
-              {decisionMode ? "Compare On" : "Compare Off"}
-            </Button>
             <Button size="sm" variant="outline" onClick={() => setShowCompare((value) => !value)}>
               Compare
             </Button>
@@ -135,7 +131,6 @@ function StopDetails({ stop, onNavigateToStop }: { stop: StopData; onNavigateToS
               option={option}
               selected={selectedStay === option.label}
               onSelect={() => setSelectedStay(option.label)}
-              decisionMode={decisionMode}
             />
           ))}
         </div>
