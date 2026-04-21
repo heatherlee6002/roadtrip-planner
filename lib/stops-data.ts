@@ -130,6 +130,8 @@ export const baselineRoute1: BaselineRouteStop[] = [
   { step: 35, name: "Gloucester", region: "Massachusetts", type: "end", driveHoursFromPrevious: 4.5, plannedStayDays: 0, dogPlan: "Home", notes: "Trip complete." },
 ]
 
+export const HOME_TO_FIRST_STOP_MILES = 471
+
 export const baselineRoute1WithDistance: BaselineRouteDistance[] = [
   { step: 1, distanceMilesToNext: 210 },
   { step: 2, distanceMilesToNext: 105 },
@@ -316,10 +318,16 @@ const segmentDistanceByStep = new Map<number, number>(
   baselineRoute1WithDistance.map((segment) => [segment.step, segment.distanceMilesToNext])
 )
 
-function getTotalMilesBeforeStep(step: number): number {
-  return baselineRoute1
-    .filter((stop) => stop.step < step)
-    .reduce((sum, stop) => sum + (segmentDistanceByStep.get(stop.step) ?? 0), 0)
+function getMilesTraveledToStep(step: number): number {
+  if (step <= 0) return 0
+
+  let total = HOME_TO_FIRST_STOP_MILES
+
+  for (let currentStep = 1; currentStep < step; currentStep += 1) {
+    total += segmentDistanceByStep.get(currentStep) ?? 0
+  }
+
+  return total
 }
 
 export const stopsData: StopData[] = [
@@ -336,7 +344,7 @@ export const stopsData: StopData[] = [
     stayDuration: "Home",
     plannedStayLabel: formatPlannedStay(0),
     plannedStayDays: 0,
-    distanceMilesToNext: segmentDistanceByStep.get(1) ?? 0,
+    distanceMilesToNext: HOME_TO_FIRST_STOP_MILES,
     highlights: ["launch point"],
     dogWalks: [{ name: "Good Harbor Beach", type: "beach", leashRequired: true }],
     areaWarnings: { summary: "Check local seasonal dog rules", rating: 1 },
@@ -371,7 +379,7 @@ export const stopsData: StopData[] = [
     const point = coords[stop.step] ?? { lat: 39.5, lng: -98.35, x: 50, y: 25 }
     const plannedStayLabel = formatPlannedStay(stop.plannedStayDays)
     const distanceMilesToNext = segmentDistanceByStep.get(stop.step) ?? 0
-    const totalMiles = getTotalMilesBeforeStep(stop.step)
+    const totalMiles = getMilesTraveledToStep(stop.step)
 
     return {
       id: String(stop.step),
