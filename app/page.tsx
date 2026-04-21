@@ -225,8 +225,8 @@ export default function RoadTripPlanner() {
 
   return (
     <main className="min-h-[100dvh] bg-background flex flex-col lg:h-[100dvh] lg:overflow-hidden">
-      <section className="lg:hidden flex-1 flex flex-col min-h-0 overflow-y-auto">
-        <div className="px-4 pt-[env(safe-area-inset-top,12px)] pb-2 border-b border-border/50 space-y-2">
+      <section className="lg:hidden h-[100dvh] flex flex-col overflow-hidden">
+        <div className="shrink-0 px-4 pt-[env(safe-area-inset-top,12px)] pb-2 border-b border-border/50 space-y-2">
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-full bg-primary/20 text-primary flex items-center justify-center">
               <MapPin className="w-4 h-4" />
@@ -244,7 +244,7 @@ export default function RoadTripPlanner() {
           </div>
         </div>
 
-        <div className="relative h-[48dvh] min-h-[320px] border-b border-border/50">
+        <div className="relative flex-1 min-h-0 border-b border-border/50">
           <TripMap
             currentStopId={currentStopId}
             selectedStop={selectedStopId}
@@ -257,7 +257,7 @@ export default function RoadTripPlanner() {
             if (!stop) return null
 
             return (
-              <div className="absolute bottom-3 left-0 right-0 mx-3 animate-in slide-in-from-bottom-4 duration-200 z-[1000]">
+              <div className="absolute bottom-[84px] left-0 right-0 mx-3 animate-in slide-in-from-bottom-4 duration-200 z-[1000]">
                 <div className="bg-card border border-border rounded-2xl shadow-xl overflow-hidden">
                   <div className="bg-primary px-4 py-3 flex items-center justify-between">
                     <div className="flex items-center gap-3 min-w-0">
@@ -314,7 +314,7 @@ export default function RoadTripPlanner() {
           )}
         </div>
 
-        <div className="sticky bottom-0 z-[1200] border-t border-border/70 bg-background/95 backdrop-blur px-3 py-2 pb-[max(env(safe-area-inset-bottom,8px),8px)]">
+        <div className="shrink-0 border-t border-border/70 bg-background/95 backdrop-blur px-3 py-2 pb-[max(env(safe-area-inset-bottom,8px),8px)]">
           <div className="grid grid-cols-3 gap-2">
             <Button variant="outline" className="h-10 text-xs gap-1.5" onClick={() => setShowMobileRouteSheet(true)}>
               <List className="w-4 h-4" />
