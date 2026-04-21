@@ -179,3 +179,98 @@ export function buildTripProgressSummary({
     stayWarning: stayedTooLong ? "You are staying longer than planned. This may delay your schedule." : null,
   }
 }
+export function getNowPrefill() {
+  const now = new Date()
+
+  const year = now.getFullYear()
+  const month = `${now.getMonth() + 1}`.padStart(2, "0")
+  const day = `${now.getDate()}`.padStart(2, "0")
+  const hours = `${now.getHours()}`.padStart(2, "0")
+  const minutes = `${now.getMinutes()}`.padStart(2, "0")
+
+  return {
+    date: `${year}-${month}-${day}`,
+    time: `${hours}:${minutes}`,
+  }
+}
+
+export function combineLocalDateAndTime(date: string, time: string) {
+  return new Date(`${date}T${time}:00`).toISOString()
+}
+
+export function getExpectedStopDate(
+  actualDepartureAt: string | undefined,
+  plannedDayOffset: number
+) {
+  if (!actualDepartureAt) return null
+
+  const start = new Date(actualDepartureAt)
+  const expected = new Date(start)
+  expected.setDate(expected.getDate() + plannedDayOffset)
+  return expected
+}
+
+export function getNextUpcomingStopId<
+  T extends { id: string; order: number }
+>(
+  stops: T[],
+  progress: {
+    stopProgress: Record<string, { stopId: string; userState: "upcoming" | "done" | "skipped" }>
+  }
+) {
+  const sorted = [...stops].sort((a, b) => a.order - b.order)
+
+  const next = sorted.find((stop) => {
+    const state = progress.stopProgress[stop.id]?.userState ?? "upcoming"
+    return state === "upcoming"
+  })
+
+  return next?.id
+}
+
+export function getTimingState(params: {
+  runtimeStarted: boolean
+  actualDepartureAt?: string
+  stopProgress?: { stopId: string; userState: "upcoming" | "done" | "skipped" }
+  stopArrival?: { stopId: string; arrivedAt: string; actualStay?: string; notes?: string }
+  plannedDayOffset: number
+  now?: Date
+}): "ahead" | "on_track" | "due_today" | "delayed" {
+  const {
+    runtimeStarted,
+    actualDepartureAt,
+    stopProgress,
+    stopArrival,
+    plannedDayOffset,
+    now = new Date(),
+  } = params
+
+  if (stopProgress?.userState === "skipped") return "on_track"
+  if (!runtimeStarted || !actualDepartureAt) return "on_track"
+
+  const expected = getExpectedStopDate(actualDepartureAt, plannedDayOffset)
+  if (!expected) return "on_track"
+
+  if (stopProgress?.userState === "done" && stopArrival?.arrivedAt) {
+    const arrived = new Date(stopArrival.arrivedAt).getTime()
+    const expectedTime = expected.getTime()
+    const diffMs = arrived - expectedTime
+
+    if (diffMs < -12 * 60 * 60 * 1000) return "ahead"
+    if (diffMs > 12 * 60 * 60 * 1000) return "delayed"
+    return "on_track"
+  }
+
+  const todayStart = new Date(now)
+  todayStart.setHours(0, 0, 0, 0)
+
+  const todayEnd = new Date(now)
+  todayEnd.setHours(23, 59, 59, 999)
+
+  const expectedTime = expected.getTime()
+
+  if (expectedTime < todayStart.getTime()) return "delayed"
+  if (expectedTime <= todayEnd.getTime()) return "due_today"
+
+  return "on_track"
+}
