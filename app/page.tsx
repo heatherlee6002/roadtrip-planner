@@ -10,7 +10,7 @@ import { EmergencyScreen } from "@/components/emergency-screen"
 import { StopDetailScreen } from "@/components/stop-detail-screen"
 import { stopsData, getStopById } from "@/lib/stops-data"
 import { createRouteDecisionContext, getNextStops, type RouteStrategy } from "@/lib/route-engine"
-import { getMilesToNextStop, getMilesTraveled } from "@/lib/stops-data"
+import { stopsData, getStopById, getMilesToNextStop, getMilesTraveled } from "@/lib/stops-data"
 import { useGeolocation } from "@/hooks/use-geolocation"
 import { Navigation, X, ChevronRight, MapPin as MapPinIcon, Clock, Dog } from "lucide-react"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -53,7 +53,10 @@ export default function RoadTripPlanner() {
   } = useGeolocation()
 
 
-  const currentStop = getStopById(currentStopId)
+const currentStop = getStopById(currentStopId)
+  
+const milesToNextStop = currentStop?.distanceMilesToNext ?? 0
+const milesTraveled = currentStop?.totalMiles ?? 0
 const currentStep = Number.parseInt(currentStopId, 10)
 
 const isHomeStart = currentStopId === "0"
@@ -292,10 +295,18 @@ const milesTraveled = isHomeStart ? 0 : getMilesTraveled(activeRouteStep)
                   <MapPin className="w-5 h-5 text-primary" />
                  <div>
 <div>
+ <div>
   <div>
     <span className="text-sm text-muted-foreground">You are near </span>
-    <span className="text-sm font-semibold text-foreground">{currentStop?.shortName || "Home"}</span>
+    <span className="text-sm font-semibold text-foreground">
+      {currentStop?.shortName || "Home"}
+    </span>
   </div>
+
+  <p className="text-xs text-muted-foreground">
+    {milesToNextStop} mi to next stop • {milesTraveled} mi traveled
+  </p>
+</div>
   <p className="text-xs text-muted-foreground">
     {milesToNextStop} miles to next stop / {milesTraveled} miles traveled
   </p>
@@ -449,7 +460,9 @@ const milesTraveled = isHomeStart ? 0 : getMilesTraveled(activeRouteStep)
                 className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-left ${stop.id === currentStopId ? "border-primary bg-primary/10" : "border-border bg-background"}`}
               >
                 <p className="text-xs font-medium">{stop.shortName}</p>
-                <p className="text-[10px] text-muted-foreground">{stop.distance}</p>
+                <p className="text-[10px] text-muted-foreground">
+  {stop.distanceMilesToNext} mi next
+</p>
               </button>
             ))}
           </div>
